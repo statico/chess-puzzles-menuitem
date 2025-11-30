@@ -2,7 +2,8 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBarItem: NSStatusItem?
-    var puzzleWindowController: PuzzleWindowController?
+    var puzzleMenuItemView: PuzzleMenuItemView?
+    var puzzleMenuItem: NSMenuItem?
     var statsWindowController: StatsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -40,6 +41,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupMenu() {
         let menu = NSMenu()
+
+        // Create puzzle view menu item
+        let puzzleView = PuzzleMenuItemView(frame: .zero)
+        puzzleMenuItemView = puzzleView
+
+        let puzzleMenuItem = NSMenuItem()
+        puzzleMenuItem.view = puzzleView
+        menu.addItem(puzzleMenuItem)
+        self.puzzleMenuItem = puzzleMenuItem
+
+        menu.addItem(NSMenuItem.separator())
 
         // New Puzzle
         let newPuzzleItem = NSMenuItem(title: "New Puzzle", action: #selector(newPuzzleClicked), keyEquivalent: "n")
@@ -88,13 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func newPuzzleClicked() {
-        if puzzleWindowController == nil {
-            let windowController = PuzzleWindowController()
-            puzzleWindowController = windowController
-        }
-        puzzleWindowController?.showWindow(nil)
-        puzzleWindowController?.loadNewPuzzle()
-        NSApp.activate(ignoringOtherApps: true)
+        puzzleMenuItemView?.loadNewPuzzle()
     }
 
     @objc func difficultySelected(_ sender: NSMenuItem) {
@@ -108,8 +114,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Reload puzzle if window is open
-        puzzleWindowController?.loadNewPuzzle()
+        // Reload puzzle if view exists
+        puzzleMenuItemView?.loadNewPuzzle()
     }
 
     @objc func showStatistics() {
