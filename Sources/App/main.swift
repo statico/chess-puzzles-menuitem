@@ -13,20 +13,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create status bar item
         statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        // Set menu bar icon (using chess piece symbol)
+        // Set menu bar icon (using chess knight symbol)
         if let button = statusBarItem?.button {
-            // Use text fallback for better compatibility
-            button.title = "♟"
-            button.image = nil
+            // Create a larger icon from the Unicode chess knight character
+            let iconSize: CGFloat = 22
+            let image = NSImage(size: NSSize(width: iconSize, height: iconSize))
+            image.lockFocus()
 
-            // Try to set SF Symbol if available (macOS 11+)
-            if #available(macOS 11.0, *) {
-                if let image = NSImage(systemSymbolName: "figure.chess", accessibilityDescription: "Chess Puzzles") {
-                    button.image = image
-                    button.image?.isTemplate = true
-                    button.title = ""
-                }
-            }
+            // Draw the chess knight character at a larger size
+            let font = NSFont.systemFont(ofSize: iconSize)
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.labelColor
+            ]
+            let attributedString = NSAttributedString(string: "♞", attributes: attributes)
+            let stringSize = attributedString.size()
+            let point = NSPoint(
+                x: (iconSize - stringSize.width) / 2,
+                y: (iconSize - stringSize.height) / 2 - 1 // Slight vertical adjustment
+            )
+            attributedString.draw(at: point)
+
+            image.unlockFocus()
+            image.isTemplate = true
+
+            button.image = image
+            button.imagePosition = .imageLeading
+            button.title = ""
         }
 
         // Load puzzles
