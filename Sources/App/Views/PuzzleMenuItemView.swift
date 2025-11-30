@@ -11,9 +11,11 @@ class PuzzleMenuItemView: NSView {
     var statusLabel: NSTextField!
     var timerLabel: NSTextField!
     var streakLabel: NSTextField!
+    var messageLabel: NSTextField!
     var hintButton: NSButton!
     var solutionButton: NSButton!
     var nextButton: NSButton!
+    private var messageTimer: Timer?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -40,6 +42,8 @@ class PuzzleMenuItemView: NSView {
         // - Top padding
         // - Status row
         // - Spacing
+        // - Message row (for hints, errors, etc.)
+        // - Spacing
         // - Streak row
         // - Spacing
         // - Buttons row
@@ -47,7 +51,7 @@ class PuzzleMenuItemView: NSView {
         // - Board (400px)
         // - Bottom padding
 
-        let totalHeight = padding + controlHeight + spacing + controlHeight + spacing + controlHeight + spacing + boardSize + padding
+        let totalHeight = padding + controlHeight + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + spacing + boardSize + padding
         let totalWidth = boardSize + (padding * 2)
 
         // Set frame to accommodate all content
@@ -69,6 +73,18 @@ class PuzzleMenuItemView: NSView {
         timerLabel.alignment = .right
         addSubview(timerLabel)
         self.timerLabel = timerLabel
+
+        currentY -= (controlHeight + spacing)
+
+        // Message label (for hints, errors, success messages)
+        let messageLabel = NSTextField(labelWithString: "")
+        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: controlHeight)
+        messageLabel.font = NSFont.systemFont(ofSize: 12)
+        messageLabel.textColor = NSColor.secondaryLabelColor
+        messageLabel.alignment = .center
+        messageLabel.lineBreakMode = .byTruncatingMiddle
+        addSubview(messageLabel)
+        self.messageLabel = messageLabel
 
         currentY -= (controlHeight + spacing)
 
@@ -125,6 +141,7 @@ class PuzzleMenuItemView: NSView {
     func loadNewPuzzle() {
         guard let puzzle = puzzleManager.getNextPuzzle() else {
             statusLabel.stringValue = "No puzzles available"
+            showMessage("No puzzles available. Please download the puzzle database.", color: systemColor("red"))
             return
         }
 
@@ -136,6 +153,7 @@ class PuzzleMenuItemView: NSView {
         nextButton.isHidden = true
         hintButton.isEnabled = true
         solutionButton.isEnabled = true
+        clearMessage()
 
         boardView.clearSelection()
     }
@@ -178,13 +196,13 @@ class PuzzleMenuItemView: NSView {
 
     @objc private func hintClicked(_ sender: NSButton) {
         guard let hint = puzzleManager.getHint() else { return }
-        showAlert(title: "Hint", message: "First move: \(hint)")
+        showMessage("Hint: First move is \(hint)", color: systemColor("blue"))
     }
 
     @objc private func solutionClicked(_ sender: NSButton) {
         let solution = puzzleManager.getSolution()
         let solutionText = solution.joined(separator: " ")
-        showAlert(title: "Solution", message: solutionText)
+        showMessage("Solution: \(solutionText)", color: systemColor("orange"))
         showSolution()
     }
 
@@ -222,13 +240,45 @@ class PuzzleMenuItemView: NSView {
         loadNewPuzzle()
     }
 
-    private func showAlert(title: String, message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+    private func showMessage(_ message: String, color: NSColor? = nil) {
+        messageTimer?.invalidate()
+        messageLabel.stringValue = message
+        if #available(macOS 10.15, *) {
+            messageLabel.textColor = color ?? .secondaryLabelColor
+        } else {
+            messageLabel.textColor = color ?? .gray
+        }
+
+        // Auto-clear message after 5 seconds
+        messageTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+            self?.clearMessage()
+        }
+    }
+
+    private func clearMessage() {
+        messageTimer?.invalidate()
+        messageTimer = nil
+        messageLabel.stringValue = ""
+    }
+
+    private func systemColor(_ colorName: String) -> NSColor {
+        if #available(macOS 10.15, *) {
+            switch colorName {
+            case "red": return .systemRed
+            case "blue": return .systemBlue
+            case "green": return .systemGreen
+            case "orange": return .systemOrange
+            default: return .secondaryLabelColor
+            }
+        } else {
+            switch colorName {
+            case "red": return .red
+            case "blue": return .blue
+            case "green": return .green
+            case "orange": return .orange
+            default: return .gray
+            }
+        }
     }
 
     private func puzzleSolved() {
@@ -241,7 +291,7 @@ class PuzzleMenuItemView: NSView {
         hintButton.isEnabled = false
         solutionButton.isEnabled = false
 
-        showAlert(title: "Puzzle Solved!", message: "Great job! Time: \(formatTime(solveTime))")
+        showMessage("Puzzle Solved! Time: \(formatTime(solveTime))", color: systemColor("green"))
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
@@ -252,6 +302,7 @@ class PuzzleMenuItemView: NSView {
 
     deinit {
         stopTimer()
+        messageTimer?.invalidate()
     }
 }
 
@@ -275,7 +326,7 @@ extension PuzzleMenuItemView: ChessBoardViewDelegate {
             }
         } else {
             // Wrong move
-            showAlert(title: "Incorrect Move", message: "That's not the correct move. Try again!")
+            showMessage("Incorrect move. Try again!", color: systemColor("red"))
             boardView.clearSelection()
             boardView.needsDisplay = true
         }
