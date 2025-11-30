@@ -166,8 +166,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsItem.submenu = settingsSubmenu
         menu.addItem(settingsItem)
 
-        menu.addItem(NSMenuItem.separator())
-
         // Statistics
         let statsItem = NSMenuItem(title: "Statistics", action: #selector(showStatistics), keyEquivalent: "s")
         statsItem.target = self

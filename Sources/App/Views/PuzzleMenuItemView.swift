@@ -53,11 +53,14 @@ class PuzzleMenuItemView: NSView {
         // - Message row (for hints, errors, etc.)
         // - Bottom padding
 
-        let totalHeight = padding + controlHeight + boardSize + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + padding
+        let messageHeight = controlHeight * 1.5
+        let totalHeight = padding + controlHeight + boardSize + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + spacing + messageHeight + padding
         let totalWidth = boardSize + (padding * 2)
 
         // Set frame to accommodate all content
         self.frame = NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight)
+        // Prevent the view from stretching horizontally in menu items
+        self.autoresizingMask = [.height]
 
         var currentY = totalHeight - padding - controlHeight
 
@@ -99,9 +102,11 @@ class PuzzleMenuItemView: NSView {
 
         currentY -= (controlHeight + spacing)
 
-        // Buttons row
-        let buttonWidth: CGFloat = 100
+        // Buttons row - calculate button width to fill available space
         let buttonSpacing: CGFloat = 10
+        let numberOfButtons: CGFloat = 3
+        let availableWidth = totalWidth - (padding * 2)
+        let buttonWidth = (availableWidth - (buttonSpacing * (numberOfButtons - 1))) / numberOfButtons
 
         // Hint button
         let hintButton = NSButton(title: "Hint", target: self, action: #selector(hintClicked(_:)))
@@ -130,11 +135,12 @@ class PuzzleMenuItemView: NSView {
 
         // Message label (for hints, errors, success messages)
         let messageLabel = NSTextField(labelWithString: "")
-        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: controlHeight)
+        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: controlHeight * 1.5)
         messageLabel.font = NSFont.systemFont(ofSize: 12)
         messageLabel.textColor = NSColor.secondaryLabelColor
         messageLabel.alignment = .center
-        messageLabel.lineBreakMode = .byTruncatingMiddle
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.maximumNumberOfLines = 2
         addSubview(messageLabel)
         self.messageLabel = messageLabel
 
@@ -185,13 +191,16 @@ class PuzzleMenuItemView: NSView {
         let padding: CGFloat = 20
         let controlHeight: CGFloat = 20
         let spacing: CGFloat = 10
+        let messageHeight = controlHeight * 1.5
 
         // Calculate new total dimensions
-        let totalHeight = padding + controlHeight + newBoardSize + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + padding
+        let totalHeight = padding + controlHeight + newBoardSize + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + spacing + messageHeight + padding
         let totalWidth = newBoardSize + (padding * 2)
 
         // Update frame
         self.frame = NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight)
+        // Ensure the view doesn't stretch horizontally
+        self.autoresizingMask = [.height]
 
         // Update all UI elements positions
         var currentY = totalHeight - padding - controlHeight
@@ -215,9 +224,12 @@ class PuzzleMenuItemView: NSView {
 
         currentY -= (controlHeight + spacing)
 
-        // Update buttons
-        let buttonWidth: CGFloat = 100
+        // Update buttons - calculate button width to fill available space
         let buttonSpacing: CGFloat = 10
+        let numberOfButtons: CGFloat = 3
+        let availableWidth = totalWidth - (padding * 2)
+        let buttonWidth = (availableWidth - (buttonSpacing * (numberOfButtons - 1))) / numberOfButtons
+
         hintButton.frame = NSRect(x: padding, y: currentY, width: buttonWidth, height: controlHeight)
         solutionButton.frame = NSRect(x: padding + buttonWidth + buttonSpacing, y: currentY, width: buttonWidth, height: controlHeight)
         nextButton.frame = NSRect(x: padding + (buttonWidth + buttonSpacing) * 2, y: currentY, width: buttonWidth, height: controlHeight)
@@ -225,7 +237,7 @@ class PuzzleMenuItemView: NSView {
         currentY -= (controlHeight + spacing)
 
         // Update message label
-        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: controlHeight)
+        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: messageHeight)
     }
 
     private func updateStatusLabel() {
