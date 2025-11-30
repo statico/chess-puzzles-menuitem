@@ -8,11 +8,11 @@ public enum BoardSize: String, CaseIterable {
     public var size: CGFloat {
         switch self {
         case .large:
-            return 400
+            return 320
         case .medium:
-            return 300
+            return 240
         case .small:
-            return 200
+            return 160
         }
     }
 

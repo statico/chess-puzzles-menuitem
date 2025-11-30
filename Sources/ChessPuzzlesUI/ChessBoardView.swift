@@ -417,7 +417,50 @@ struct ChessBoardView: View {
             .frame(width: size, height: size)
     }
 
+    /// Calculates the optimal image size as an exact multiple of 512px
+    /// that is >= the target display size
+    private func optimalImageSize(for targetSize: CGFloat) -> CGFloat {
+        // Exact multiples of 512px: 512, 256, 128, 64, 32, 16
+        let multiples: [CGFloat] = [512, 256, 128, 64, 32, 16]
+
+        // Find the smallest multiple that is >= targetSize
+        for multiple in multiples {
+            if multiple >= targetSize {
+                return multiple
+            }
+        }
+
+        // If target is smaller than 16, use 16 (smallest multiple)
+        return 16
+    }
+
+    /// Resizes an NSImage to the specified size
+    private func resizeImage(_ image: NSImage, to size: NSSize) -> NSImage {
+        let resizedImage = NSImage(size: size)
+        resizedImage.lockFocus()
+
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(
+            in: NSRect(origin: .zero, size: size),
+            from: NSRect(origin: .zero, size: image.size),
+            operation: .sourceOver,
+            fraction: 1.0
+        )
+
+        resizedImage.unlockFocus()
+        return resizedImage
+    }
+
     private func loadImages() {
+        // Calculate the maximum piece display size we'll need
+        // Based on the largest board size (320px) with 10% padding
+        let maxBoardSize: CGFloat = 320
+        let maxSquareSize = maxBoardSize / 8
+        let maxPieceDisplaySize = maxSquareSize * 0.8 // 10% padding
+
+        // Find optimal image size (exact multiple of 512px)
+        let optimalSize = optimalImageSize(for: maxPieceDisplaySize)
+
         let pieces: [(ChessEngine.Piece, String)] = [
             (.whiteKing, "w_king_png_shadow_512px"),
             (.whiteQueen, "w_queen_png_shadow_512px"),
@@ -434,8 +477,11 @@ struct ChessBoardView: View {
         ]
 
         for (piece, fileName) in pieces {
-            if let image = loadImage(named: fileName, inDirectory: "ChessPieces") {
-                pieceImages[piece] = image
+            if let originalImage = loadImage(named: fileName, inDirectory: "ChessPieces") {
+                // Resize to optimal size (exact multiple of 512px)
+                let targetSize = NSSize(width: optimalSize, height: optimalSize)
+                let resizedImage = resizeImage(originalImage, to: targetSize)
+                pieceImages[piece] = resizedImage
             }
         }
     }
