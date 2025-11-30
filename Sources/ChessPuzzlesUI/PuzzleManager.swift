@@ -1,6 +1,11 @@
 import Foundation
 
-enum Difficulty: String, CaseIterable {
+// Protocol for database loading to avoid zstd dependency in UI target
+public protocol PuzzleDatabaseLoader {
+    func loadCachedPuzzles() -> [Puzzle]?
+}
+
+public enum Difficulty: String, CaseIterable {
     case easiest = "Easiest"
     case easier = "Easier"
     case normal = "Normal"
@@ -23,8 +28,8 @@ enum Difficulty: String, CaseIterable {
     }
 }
 
-class PuzzleManager {
-    static let shared = PuzzleManager()
+public class PuzzleManager {
+    public static let shared = PuzzleManager()
 
     private var puzzles: [Puzzle] = []
     private var currentPuzzle: Puzzle?
@@ -33,15 +38,21 @@ class PuzzleManager {
     private var currentMoveIndex: Int = 0
     private var difficulty: Difficulty = .normal
     private var userRating: Int = 1500
+    private var databaseLoader: PuzzleDatabaseLoader?
 
     private init() {
         loadUserRating()
         loadDifficulty()
     }
 
-    func loadPuzzles() {
-        // Try to load from cache first
-        if let cached = DatabaseDownloader.shared.loadCachedPuzzles() {
+    public func setDatabaseLoader(_ loader: PuzzleDatabaseLoader?) {
+        self.databaseLoader = loader
+    }
+
+    public func loadPuzzles() {
+        // Try to load from cache first using the database loader if available
+        if let loader = databaseLoader,
+           let cached = loader.loadCachedPuzzles() {
             self.puzzles = cached
             return
         }
@@ -50,12 +61,12 @@ class PuzzleManager {
         // For now, use empty array - download will be triggered by UI
     }
 
-    func setDifficulty(_ difficulty: Difficulty) {
+    public func setDifficulty(_ difficulty: Difficulty) {
         self.difficulty = difficulty
         UserDefaults.standard.set(difficulty.rawValue, forKey: "puzzleDifficulty")
     }
 
-    func getDifficulty() -> Difficulty {
+    public func getDifficulty() -> Difficulty {
         return difficulty
     }
 
@@ -134,7 +145,7 @@ class PuzzleManager {
         return currentMoveIndex
     }
 
-    func setPuzzles(_ puzzles: [Puzzle]) {
+    public func setPuzzles(_ puzzles: [Puzzle]) {
         self.puzzles = puzzles
     }
 

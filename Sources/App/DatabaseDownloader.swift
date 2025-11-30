@@ -1,8 +1,9 @@
 import Foundation
 import zstd
+import ChessPuzzlesUI
 
-class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
-    static let shared = DatabaseDownloader()
+public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDatabaseLoader {
+    public static let shared = DatabaseDownloader()
 
     private var downloadProgress: ((Int64, Int64) -> Void)?
     private var downloadCompletion: ((Result<[Puzzle], Error>) -> Void)?
@@ -28,7 +29,7 @@ class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
         super.init()
     }
 
-    func needsRefresh() -> Bool {
+    public func needsRefresh() -> Bool {
         guard let lastRefresh = UserDefaults.standard.object(forKey: "lastDatabaseRefresh") as? Date else {
             return true
         }
@@ -36,7 +37,7 @@ class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
         return daysSinceRefresh >= 7
     }
 
-    func downloadDatabase(progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
+    public func downloadDatabase(progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
         // Check if cached file exists
         if FileManager.default.fileExists(atPath: cachedZstFileURL.path) {
             print("[DEBUG] Using cached zstd file: \(cachedZstFileURL.path)")
@@ -101,7 +102,7 @@ class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
     }
 
     // URLSessionDownloadDelegate methods
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         DispatchQueue.main.async { [weak self] in
             if let progress = self?.downloadProgress {
                 if totalBytesExpectedToWrite > 0 {
@@ -115,7 +116,7 @@ class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         print("[DEBUG] Download complete, file saved to: \(location.path)")
 
         // Move downloaded file to cache directory
@@ -171,7 +172,7 @@ class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
         })
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = error {
             print("[DEBUG] Download error: \(error.localizedDescription)")
             DispatchQueue.main.async {
@@ -402,7 +403,7 @@ class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    func loadCachedPuzzles() -> [Puzzle]? {
+    public func loadCachedPuzzles() -> [Puzzle]? {
         guard let data = try? Data(contentsOf: localDatabaseURL),
               let puzzles = try? JSONDecoder().decode([Puzzle].self, from: data) else {
             return nil
@@ -415,7 +416,7 @@ class DatabaseDownloader: NSObject, URLSessionDownloadDelegate {
         try? data.write(to: localDatabaseURL)
     }
 
-    func refreshDatabase(progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
+    public func refreshDatabase(progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
         downloadDatabase(progress: progress, completion: completion)
     }
 }

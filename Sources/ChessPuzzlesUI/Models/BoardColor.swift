@@ -1,7 +1,8 @@
 import Foundation
 import AppKit
+import SwiftUI
 
-enum BoardColor: String, CaseIterable {
+public enum BoardColor: String, CaseIterable {
     case green = "Green"
     case brown = "Brown"
     case blue = "Blue"
@@ -41,11 +42,37 @@ enum BoardColor: String, CaseIterable {
         }
     }
 
+    var lightSquareSwiftUIColor: Color {
+        switch self {
+        case .green:
+            return Color(red: 0.82, green: 0.93, blue: 0.82)
+        case .brown:
+            return Color(red: 0.96, green: 0.96, blue: 0.86)
+        case .blue:
+            return Color(red: 0.93, green: 0.95, blue: 0.98)
+        case .gray:
+            return Color(red: 0.96, green: 0.96, blue: 0.96)
+        }
+    }
+
+    var darkSquareSwiftUIColor: Color {
+        switch self {
+        case .green:
+            return Color(red: 0.47, green: 0.71, blue: 0.47)
+        case .brown:
+            return Color(red: 0.76, green: 0.60, blue: 0.42)
+        case .blue:
+            return Color(red: 0.47, green: 0.65, blue: 0.85)
+        case .gray:
+            return Color(red: 0.76, green: 0.76, blue: 0.76)
+        }
+    }
+
     static var `default`: BoardColor {
         return .green
     }
 
-    static func load() -> BoardColor {
+    public static func load() -> BoardColor {
         if let colorString = UserDefaults.standard.string(forKey: "boardColor"),
            let color = BoardColor(rawValue: colorString) {
             return color
@@ -53,7 +80,7 @@ enum BoardColor: String, CaseIterable {
         return .default
     }
 
-    func save() {
+    public func save() {
         UserDefaults.standard.set(self.rawValue, forKey: "boardColor")
     }
 }

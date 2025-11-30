@@ -1,4 +1,6 @@
 import AppKit
+import SwiftUI
+import ChessPuzzlesUI
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusBarItem: NSStatusItem?
@@ -22,11 +24,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             var knightImage: NSImage?
 
             // Try without subdirectory first (flattened structure)
-            if let url = Bundle.module.url(forResource: "w_knight_NoShadow", withExtension: "png") {
+            // Use ChessPuzzlesUI bundle for resources
+            let uiBundle = Bundle(for: PuzzleMenuItemView.self)
+
+            // Also try the resource bundle approach
+            let mainBundle = Bundle.main
+            var resourceBundle: Bundle? = uiBundle
+            if let resourceURL = mainBundle.resourceURL {
+                let bundlePath = resourceURL.appendingPathComponent("chess-puzzles-menuitem_ChessPuzzlesUI.bundle")
+                if let bundle = Bundle(url: bundlePath) {
+                    resourceBundle = bundle
+                }
+            }
+
+            if let resourceBundle = resourceBundle {
+                if let url = resourceBundle.url(forResource: "w_knight_NoShadow", withExtension: "png") {
+                    knightImage = NSImage(contentsOf: url)
+                }
+            }
+
+            if knightImage == nil, let url = Bundle.main.url(forResource: "w_knight_NoShadow", withExtension: "png") {
                 knightImage = NSImage(contentsOf: url)
-            } else if let url = Bundle.main.url(forResource: "w_knight_NoShadow", withExtension: "png") {
-                knightImage = NSImage(contentsOf: url)
-            } else if let resourcePath = Bundle.module.resourcePath {
+            }
+
+            if knightImage == nil, let resourceBundle = resourceBundle, let resourcePath = resourceBundle.resourcePath {
                 // Try root first
                 let filePath = (resourcePath as NSString).appendingPathComponent("w_knight_NoShadow.png")
                 if FileManager.default.fileExists(atPath: filePath) {
@@ -84,6 +105,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         // Load puzzles
+        // Set the database loader before loading puzzles
+        PuzzleManager.shared.setDatabaseLoader(DatabaseDownloader.shared)
         PuzzleManager.shared.loadPuzzles()
 
         // Check if we need to refresh database

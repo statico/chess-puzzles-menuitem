@@ -1,12 +1,21 @@
 import Foundation
 
-struct Puzzle: Codable, Identifiable {
-    let id: String
-    let fen: String
-    let moves: [String] // UCI format moves
-    let rating: Int
-    let themes: [String]
-    let popularity: Int?
+public struct Puzzle: Codable, Identifiable {
+    public let id: String
+    public let fen: String
+    public let moves: [String] // UCI format moves
+    public let rating: Int
+    public let themes: [String]
+    public let popularity: Int?
+
+    public init(id: String, fen: String, moves: [String], rating: Int, themes: [String], popularity: Int?) {
+        self.id = id
+        self.fen = fen
+        self.moves = moves
+        self.rating = rating
+        self.themes = themes
+        self.popularity = popularity
+    }
 
     enum CodingKeys: String, CodingKey {
         case id = "PuzzleId"
@@ -18,12 +27,14 @@ struct Puzzle: Codable, Identifiable {
     }
 }
 
-struct PuzzleStats: Codable {
-    var currentStreak: Int = 0
-    var totalSolved: Int = 0
-    var userRating: Int = 1500
+public struct PuzzleStats: Codable {
+    public var currentStreak: Int = 0
+    public var totalSolved: Int = 0
+    public var userRating: Int = 1500
     private var solveTimesData: [String: TimeInterval] = [:]
-    var lastPuzzleDate: Date?
+    public var lastPuzzleDate: Date?
+
+    public init() {}
 
     var solveTimes: [Date: TimeInterval] {
         get {

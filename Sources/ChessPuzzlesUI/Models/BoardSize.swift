@@ -1,6 +1,6 @@
 import Foundation
 
-enum BoardSize: String, CaseIterable {
+public enum BoardSize: String, CaseIterable {
     case large = "Large"
     case medium = "Medium"
     case small = "Small"
@@ -20,7 +20,7 @@ enum BoardSize: String, CaseIterable {
         return .medium
     }
 
-    static func load() -> BoardSize {
+    public static func load() -> BoardSize {
         if let sizeString = UserDefaults.standard.string(forKey: "boardSize"),
            let size = BoardSize(rawValue: sizeString) {
             return size
@@ -28,7 +28,7 @@ enum BoardSize: String, CaseIterable {
         return .default
     }
 
-    func save() {
+    public func save() {
         UserDefaults.standard.set(self.rawValue, forKey: "boardSize")
     }
 }

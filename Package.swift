@@ -10,18 +10,29 @@ let package = Package(
         .executable(
             name: "chess-puzzles-menuitem",
             targets: ["App"]
+        ),
+        .library(
+            name: "ChessPuzzlesUI",
+            targets: ["ChessPuzzlesUI"]
         )
     ],
     dependencies: [
         .package(url: "https://github.com/awxkee/zstd.swift.git", from: "1.0.0")
     ],
     targets: [
-        .executableTarget(
-            name: "App",
-            dependencies: [.product(name: "zstd", package: "zstd.swift")],
+        .target(
+            name: "ChessPuzzlesUI",
+            dependencies: [],
             resources: [
                 .process("Resources"),
                 .process("Assets.xcassets")
+            ]
+        ),
+        .executableTarget(
+            name: "App",
+            dependencies: [
+                "ChessPuzzlesUI",
+                .product(name: "zstd", package: "zstd.swift")
             ]
         )
     ]
