@@ -80,7 +80,6 @@ struct ChessBoardView: View {
                 }
             }
         }
-        .aspectRatio(1, contentMode: .fit)
         .background(Color(white: 0.3))
         .onAppear {
             loadImages()

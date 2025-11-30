@@ -1,7 +1,7 @@
 import Foundation
 
-class StatsManager {
-    static let shared = StatsManager()
+public class StatsManager {
+    public static let shared = StatsManager()
 
     private let userDefaults = UserDefaults.standard
     private let statsKey = "puzzleStats"
@@ -61,7 +61,7 @@ class StatsManager {
         saveStats(stats)
     }
 
-    func getStats() -> PuzzleStats {
+    public func getStats() -> PuzzleStats {
         return loadStats()
     }
 }

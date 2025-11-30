@@ -1,7 +1,7 @@
 import Foundation
 
 // Basic chess engine for move validation and game state
-class ChessEngine {
+public class ChessEngine {
     enum Piece: Character {
         case whitePawn = "P"
         case whiteRook = "R"
@@ -36,7 +36,7 @@ class ChessEngine {
         }
     }
 
-    enum Color {
+    public enum Color {
         case white
         case black
 

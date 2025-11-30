@@ -338,15 +338,41 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 }
 
+// Observable object to manage board settings that can be updated from outside
+class BoardSettings: ObservableObject {
+    @Published var boardColor: BoardColor
+    @Published var boardSize: BoardSize
+
+    init(boardColor: BoardColor? = nil, boardSize: BoardSize? = nil) {
+        self.boardColor = boardColor ?? BoardColor.load()
+        self.boardSize = boardSize ?? BoardSize.load()
+    }
+
+    func syncFromUserDefaults() -> Bool {
+        let currentColor = BoardColor.load()
+        let currentSize = BoardSize.load()
+        var changed = false
+
+        if boardColor != currentColor {
+            boardColor = currentColor
+            changed = true
+        }
+        if boardSize != currentSize {
+            print("[DEBUG] BoardSettings.syncFromUserDefaults - boardSize changed from \(boardSize.rawValue) to \(currentSize.rawValue)")
+            boardSize = currentSize
+            changed = true
+        }
+        return changed
+    }
+}
+
 struct PuzzleMenuItemContentView: View {
     @StateObject private var viewModel: PuzzleMenuItemViewModel
-    @State private var boardColor: BoardColor
-    @State private var boardSize: BoardSize
+    @ObservedObject var boardSettings: BoardSettings
 
     init(
         viewModel: PuzzleMenuItemViewModel? = nil,
-        boardColor: BoardColor? = nil,
-        boardSize: BoardSize? = nil
+        boardSettings: BoardSettings? = nil
     ) {
         // Use provided viewModel or create default one
         if let viewModel = viewModel {
@@ -355,24 +381,27 @@ struct PuzzleMenuItemContentView: View {
             _viewModel = StateObject(wrappedValue: PuzzleMenuItemViewModel())
         }
 
-        // Use provided values or load from UserDefaults (only in non-preview contexts)
+        // Use provided boardSettings or create new one
         #if DEBUG
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
             // In preview mode, use defaults
-            _boardColor = State(initialValue: boardColor ?? .green)
-            _boardSize = State(initialValue: boardSize ?? .medium)
+            self.boardSettings = boardSettings ?? BoardSettings(boardColor: .green, boardSize: .medium)
         } else {
-            _boardColor = State(initialValue: boardColor ?? BoardColor.load())
-            _boardSize = State(initialValue: boardSize ?? BoardSize.load())
+            let loadedColor = BoardColor.load()
+            let loadedSize = BoardSize.load()
+            print("[DEBUG] PuzzleMenuItemContentView.init - loaded boardSize: \(loadedSize.rawValue) (\(loadedSize.size)px)")
+            self.boardSettings = boardSettings ?? BoardSettings(boardColor: loadedColor, boardSize: loadedSize)
         }
         #else
-        _boardColor = State(initialValue: boardColor ?? BoardColor.load())
-        _boardSize = State(initialValue: boardSize ?? BoardSize.load())
+        let loadedColor = BoardColor.load()
+        let loadedSize = BoardSize.load()
+        print("[DEBUG] PuzzleMenuItemContentView.init - loaded boardSize: \(loadedSize.rawValue) (\(loadedSize.size)px)")
+        self.boardSettings = boardSettings ?? BoardSettings(boardColor: loadedColor, boardSize: loadedSize)
         #endif
     }
 
     var body: some View {
-        let boardSizeValue = boardSize.size
+        let boardSizeValue = boardSettings.boardSize.size
         let padding: CGFloat = 20
         let controlHeight: CGFloat = 20
         let spacing: CGFloat = 10
@@ -396,7 +425,7 @@ struct PuzzleMenuItemContentView: View {
             ChessBoardView(
                 engine: viewModel.engine,
                 playerColor: viewModel.getPlayerColor(),
-                showCoordinates: boardSize != .small,
+                showCoordinates: boardSettings.boardSize != .small,
                 onMove: { from, to in
                     viewModel.handleMove(from: from, to: to)
                 },
@@ -405,6 +434,7 @@ struct PuzzleMenuItemContentView: View {
                 }
             )
             .frame(width: boardSizeValue, height: boardSizeValue)
+            .id("\(boardSettings.boardSize.rawValue)-\(boardSizeValue)")
 
             // Streak label
             HStack {
@@ -450,8 +480,13 @@ struct PuzzleMenuItemContentView: View {
         .padding(padding)
         .frame(width: boardSizeValue + (padding * 2), alignment: .center)
         .fixedSize(horizontal: true, vertical: false)
+        .id("puzzle-view-\(boardSettings.boardSize.rawValue)-\(boardSizeValue)") // Force view refresh when board size changes
         .onAppear {
+            print("[DEBUG] PuzzleMenuItemContentView.body.onAppear - boardSize: \(boardSettings.boardSize.rawValue) (\(boardSettings.boardSize.size)px)")
             viewModel.loadNewPuzzle()
+        }
+        .onChange(of: boardSettings.boardSize) { newSize in
+            print("[DEBUG] PuzzleMenuItemContentView.body.onChange - boardSize changed to: \(newSize.rawValue) (\(newSize.size)px)")
         }
     }
 
@@ -460,13 +495,20 @@ struct PuzzleMenuItemContentView: View {
     }
 
     func setBoardColor(_ color: BoardColor) {
-        boardColor = color
-        // Update the board view's color
-        // This will need to be passed to ChessBoardView
+        boardSettings.boardColor = color
+        color.save()
     }
 
     func setBoardSize(_ size: BoardSize) {
-        boardSize = size
+        print("[DEBUG] PuzzleMenuItemContentView.setBoardSize - called with: \(size.rawValue) (\(size.size)px), current: \(boardSettings.boardSize.rawValue) (\(boardSettings.boardSize.size)px)")
+        boardSettings.boardSize = size
+        size.save()
+        print("[DEBUG] PuzzleMenuItemContentView.setBoardSize - after update: \(boardSettings.boardSize.rawValue) (\(boardSettings.boardSize.size)px)")
+    }
+
+    @discardableResult
+    func syncBoardSizeFromUserDefaults() -> Bool {
+        return boardSettings.syncFromUserDefaults()
     }
 
     func menuWillOpen() {
@@ -482,6 +524,7 @@ struct PuzzleMenuItemContentView: View {
 public class PuzzleMenuItemView: NSView {
     private var hostingView: NSHostingView<PuzzleMenuItemContentView>?
     private var puzzleView: PuzzleMenuItemContentView?
+    private var boardSettings: BoardSettings?
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -494,11 +537,18 @@ public class PuzzleMenuItemView: NSView {
     }
 
     private func setupUI() {
+        print("[DEBUG] PuzzleMenuItemView.setupUI - starting")
         // Calculate and set the proper frame size first
         updateFrame()
 
-        let puzzleView = PuzzleMenuItemContentView()
+        // Create shared BoardSettings object
+        let boardSettings = BoardSettings()
+        self.boardSettings = boardSettings
+        print("[DEBUG] PuzzleMenuItemView.setupUI - created BoardSettings with size: \(boardSettings.boardSize.rawValue) (\(boardSettings.boardSize.size)px)")
+
+        let puzzleView = PuzzleMenuItemContentView(boardSettings: boardSettings)
         self.puzzleView = puzzleView
+        print("[DEBUG] PuzzleMenuItemView.setupUI - created PuzzleMenuItemContentView")
 
         let hostingView = NSHostingView(rootView: puzzleView)
         self.hostingView = hostingView
@@ -522,12 +572,15 @@ public class PuzzleMenuItemView: NSView {
         // Ensure hosting view is properly sized
         if let hostingView = hostingView {
             hostingView.frame = bounds
+            // Force the hosting view to recalculate its preferred size
+            hostingView.invalidateIntrinsicContentSize()
         }
     }
 
     private func updateFrame() {
         let boardSize = BoardSize.load()
         let boardSizeValue = boardSize.size
+        print("[DEBUG] PuzzleMenuItemView.updateFrame - boardSize: \(boardSize.rawValue) (\(boardSizeValue)px)")
         let padding: CGFloat = 20
         let controlHeight: CGFloat = 20
         let spacing: CGFloat = 10
@@ -537,11 +590,13 @@ public class PuzzleMenuItemView: NSView {
         let totalHeight = padding + controlHeight + boardSizeValue + spacing + controlHeight + spacing + controlHeight + spacing + messageHeight + padding
         let totalWidth = boardSizeValue + (padding * 2)
 
+        print("[DEBUG] PuzzleMenuItemView.updateFrame - calculated size: \(totalWidth)x\(totalHeight), current frame: \(self.frame)")
         // Set the frame
         self.frame = NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight)
+        print("[DEBUG] PuzzleMenuItemView.updateFrame - set frame to: \(self.frame)")
 
-        // Prevent horizontal stretching
-        autoresizingMask = [.height]
+        // Allow both width and height to be set by the menu system
+        autoresizingMask = []
     }
 
     public override var intrinsicContentSize: NSSize {
@@ -555,7 +610,9 @@ public class PuzzleMenuItemView: NSView {
         let totalHeight = padding + controlHeight + boardSizeValue + spacing + controlHeight + spacing + controlHeight + spacing + messageHeight + padding
         let totalWidth = boardSizeValue + (padding * 2)
 
-        return NSSize(width: totalWidth, height: totalHeight)
+        let size = NSSize(width: totalWidth, height: totalHeight)
+        print("[DEBUG] PuzzleMenuItemView.intrinsicContentSize - boardSize: \(boardSize.rawValue) (\(boardSizeValue)px), returning: \(size)")
+        return size
     }
 
     public func loadNewPuzzle() {
@@ -567,14 +624,77 @@ public class PuzzleMenuItemView: NSView {
     }
 
     public func setBoardSize(_ size: BoardSize) {
-        puzzleView?.setBoardSize(size)
+        print("[DEBUG] PuzzleMenuItemView.setBoardSize - called with: \(size.rawValue) (\(size.size)px)")
+
+        // Update the BoardSettings object directly
+        if let boardSettings = boardSettings {
+            print("[DEBUG] PuzzleMenuItemView.setBoardSize - current boardSettings.boardSize: \(boardSettings.boardSize.rawValue) (\(boardSettings.boardSize.size)px)")
+            boardSettings.boardSize = size
+            size.save()
+            print("[DEBUG] PuzzleMenuItemView.setBoardSize - after updating boardSettings.boardSize: \(boardSettings.boardSize.rawValue) (\(boardSettings.boardSize.size)px)")
+        } else {
+            print("[DEBUG] PuzzleMenuItemView.setBoardSize - WARNING: boardSettings is nil!")
+        }
+
         // Update frame when board size changes
         updateFrame()
         invalidateIntrinsicContentSize()
+        print("[DEBUG] PuzzleMenuItemView.setBoardSize - after updateFrame, frame: \(self.frame), intrinsicContentSize: \(intrinsicContentSize)")
+
+        // Force hosting view to update and recalculate its size
+        hostingView?.invalidateIntrinsicContentSize()
+        hostingView?.needsLayout = true
+
+        // Update hosting view frame to match new bounds
+        if let hostingView = hostingView {
+            hostingView.frame = bounds
+            print("[DEBUG] PuzzleMenuItemView.setBoardSize - hostingView.frame set to: \(hostingView.frame)")
+        }
+
+        needsLayout = true
+
+        // Notify the menu system that the view size has changed
+        // This is critical for NSMenuItem views to resize properly
+        if let menuItem = self.enclosingMenuItem {
+            print("[DEBUG] PuzzleMenuItemView.setBoardSize - reattaching view to menu item")
+            // Temporarily remove and re-add the view to force menu to recalculate
+            menuItem.view = nil
+            menuItem.view = self
+        }
+
+        // Force layout update
+        superview?.needsLayout = true
+        window?.invalidateCursorRects(for: self)
+        print("[DEBUG] PuzzleMenuItemView.setBoardSize - completed")
     }
 
     public func menuWillOpen() {
+        print("[DEBUG] PuzzleMenuItemView.menuWillOpen - called")
+        // Reload board size from UserDefaults before opening menu
+        // This ensures the view reflects the current setting even if it was changed elsewhere
+        let boardSizeChanged = boardSettings?.syncFromUserDefaults() ?? false
+        print("[DEBUG] PuzzleMenuItemView.menuWillOpen - boardSizeChanged: \(boardSizeChanged)")
+
+        if boardSizeChanged {
+            print("[DEBUG] PuzzleMenuItemView.menuWillOpen - board size changed, updating frame and reattaching view")
+            // Update the NSView frame to match the current board size
+            updateFrame()
+            invalidateIntrinsicContentSize()
+            hostingView?.invalidateIntrinsicContentSize()
+            needsLayout = true
+
+            // Reattach the view to force the menu to recalculate the item size
+            if let menuItem = self.enclosingMenuItem {
+                print("[DEBUG] PuzzleMenuItemView.menuWillOpen - reattaching view to menu item")
+                menuItem.view = nil
+                menuItem.view = self
+            }
+        } else {
+            print("[DEBUG] PuzzleMenuItemView.menuWillOpen - board size unchanged, current frame: \(self.frame), intrinsicContentSize: \(intrinsicContentSize)")
+        }
+
         puzzleView?.menuWillOpen()
+        print("[DEBUG] PuzzleMenuItemView.menuWillOpen - completed")
     }
 
     public func menuDidClose() {

@@ -266,10 +266,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func boardSizeSelected(_ sender: NSMenuItem) {
-        guard let size = sender.representedObject as? BoardSize else { return }
+        guard let size = sender.representedObject as? BoardSize else {
+            print("[DEBUG] AppDelegate.boardSizeSelected - invalid size")
+            return
+        }
+        let sizeValue = size.size
+        print("[DEBUG] AppDelegate.boardSizeSelected - selected size: \(size.rawValue) (\(sizeValue)px)")
         size.save()
+        print("[DEBUG] AppDelegate.boardSizeSelected - saved to UserDefaults, current value: \(BoardSize.load().rawValue)")
 
         // Update puzzle menu item view
+        print("[DEBUG] AppDelegate.boardSizeSelected - calling puzzleMenuItemView?.setBoardSize(\(size.rawValue))")
         puzzleMenuItemView?.setBoardSize(size)
 
         // Update menu state (now under Settings submenu)
@@ -279,6 +286,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 item.state = (item.representedObject as? BoardSize == size) ? .on : .off
             }
         }
+        print("[DEBUG] AppDelegate.boardSizeSelected - completed")
     }
 
     @objc func showStatistics() {
