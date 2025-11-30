@@ -17,6 +17,7 @@ class ChessBoardView: NSView {
 
     private var boardColor: BoardColor = BoardColor.load()
     private var pieceImages: [ChessEngine.Piece: NSImage] = [:]
+    var showCoordinates: Bool = true
 
     private let selectedSquareColor = NSColor(red: 0.5, green: 0.8, blue: 1.0, alpha: 0.6)
     private let highlightColor = NSColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 0.4)
@@ -170,8 +171,10 @@ class ChessBoardView: NSView {
             }
         }
 
-        // Draw coordinates
-        drawCoordinates(squareSize: squareSize)
+        // Draw coordinates (only if enabled)
+        if showCoordinates {
+            drawCoordinates(squareSize: squareSize)
+        }
 
         // Draw dragged piece on top
         if let dragged = draggedPiece {

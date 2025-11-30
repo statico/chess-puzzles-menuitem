@@ -129,8 +129,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         difficultyItem.submenu = difficultySubmenu
         settingsSubmenu.addItem(difficultyItem)
 
-        settingsSubmenu.addItem(NSMenuItem.separator())
-
         // Board Color submenu (within Settings)
         let boardColorItem = NSMenuItem(title: "Board Color", action: nil, keyEquivalent: "")
         let boardColorSubmenu = NSMenu()
@@ -147,6 +145,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         boardColorItem.submenu = boardColorSubmenu
         settingsSubmenu.addItem(boardColorItem)
+
+        // Board Size submenu (within Settings)
+        let boardSizeItem = NSMenuItem(title: "Board Size", action: nil, keyEquivalent: "")
+        let boardSizeSubmenu = NSMenu()
+
+        for size in BoardSize.allCases {
+            let item = NSMenuItem(title: size.rawValue, action: #selector(boardSizeSelected(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = size
+            if size == BoardSize.load() {
+                item.state = .on
+            }
+            boardSizeSubmenu.addItem(item)
+        }
+
+        boardSizeItem.submenu = boardSizeSubmenu
+        settingsSubmenu.addItem(boardSizeItem)
 
         settingsItem.submenu = settingsSubmenu
         menu.addItem(settingsItem)
@@ -225,6 +240,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
            let boardColorMenu = settingsMenu.item(withTitle: "Board Color")?.submenu {
             for item in boardColorMenu.items {
                 item.state = (item.representedObject as? BoardColor == color) ? .on : .off
+            }
+        }
+    }
+
+    @objc func boardSizeSelected(_ sender: NSMenuItem) {
+        guard let size = sender.representedObject as? BoardSize else { return }
+        size.save()
+
+        // Update puzzle menu item view
+        puzzleMenuItemView?.setBoardSize(size)
+
+        // Update menu state (now under Settings submenu)
+        if let settingsMenu = statusBarItem?.menu?.item(withTitle: "Settings")?.submenu,
+           let boardSizeMenu = settingsMenu.item(withTitle: "Board Size")?.submenu {
+            for item in boardSizeMenu.items {
+                item.state = (item.representedObject as? BoardSize == size) ? .on : .off
             }
         }
     }

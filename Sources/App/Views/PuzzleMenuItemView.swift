@@ -34,8 +34,9 @@ class PuzzleMenuItemView: NSView {
     }
 
     private func setupUI() {
-        // Total view size: 400px board + padding + controls
-        let boardSize: CGFloat = 400
+        // Load board size from preferences
+        let boardSizeEnum = BoardSize.load()
+        let boardSize: CGFloat = boardSizeEnum.size
         let padding: CGFloat = 20
         let controlHeight: CGFloat = 20
         let spacing: CGFloat = 10
@@ -82,6 +83,8 @@ class PuzzleMenuItemView: NSView {
         let boardTopY = currentY - boardSize
         let boardView = ChessBoardView(frame: NSRect(x: padding, y: boardTopY, width: boardSize, height: boardSize))
         boardView.delegate = self
+        // Hide coordinates for small board size
+        boardView.showCoordinates = boardSizeEnum != .small
         addSubview(boardView)
         self.boardView = boardView
 
@@ -175,6 +178,54 @@ class PuzzleMenuItemView: NSView {
 
     func setBoardColor(_ color: BoardColor) {
         boardView.setBoardColor(color)
+    }
+
+    func setBoardSize(_ size: BoardSize) {
+        let newBoardSize = size.size
+        let padding: CGFloat = 20
+        let controlHeight: CGFloat = 20
+        let spacing: CGFloat = 10
+
+        // Calculate new total dimensions
+        let totalHeight = padding + controlHeight + newBoardSize + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + padding
+        let totalWidth = newBoardSize + (padding * 2)
+
+        // Update frame
+        self.frame = NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight)
+
+        // Update all UI elements positions
+        var currentY = totalHeight - padding - controlHeight
+
+        // Update status label
+        statusLabel.frame = NSRect(x: padding, y: currentY, width: 200, height: controlHeight)
+
+        // Update timer label
+        timerLabel.frame = NSRect(x: totalWidth - padding - 200, y: currentY, width: 200, height: controlHeight)
+
+        // Update board view
+        currentY -= controlHeight
+        let boardTopY = currentY - newBoardSize
+        boardView.frame = NSRect(x: padding, y: boardTopY, width: newBoardSize, height: newBoardSize)
+        boardView.showCoordinates = size != .small
+        boardView.needsDisplay = true
+
+        // Update streak label
+        currentY = boardTopY - spacing * 2 - controlHeight
+        streakLabel.frame = NSRect(x: padding, y: currentY, width: 200, height: controlHeight)
+
+        currentY -= (controlHeight + spacing)
+
+        // Update buttons
+        let buttonWidth: CGFloat = 100
+        let buttonSpacing: CGFloat = 10
+        hintButton.frame = NSRect(x: padding, y: currentY, width: buttonWidth, height: controlHeight)
+        solutionButton.frame = NSRect(x: padding + buttonWidth + buttonSpacing, y: currentY, width: buttonWidth, height: controlHeight)
+        nextButton.frame = NSRect(x: padding + (buttonWidth + buttonSpacing) * 2, y: currentY, width: buttonWidth, height: controlHeight)
+
+        currentY -= (controlHeight + spacing)
+
+        // Update message label
+        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: controlHeight)
     }
 
     private func updateStatusLabel() {
