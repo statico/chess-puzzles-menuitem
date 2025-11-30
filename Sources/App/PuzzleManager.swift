@@ -137,5 +137,28 @@ class PuzzleManager {
     func setPuzzles(_ puzzles: [Puzzle]) {
         self.puzzles = puzzles
     }
+
+    // Get the player's color (the side that moves first in the puzzle)
+    func getPlayerColor() -> ChessEngine.Color? {
+        guard let puzzle = currentPuzzle else { return nil }
+        let components = puzzle.fen.components(separatedBy: " ")
+        if components.count > 1 && components[1] == "b" {
+            return .black
+        }
+        return .white
+    }
+
+    // Check if it's the player's turn to move
+    func isPlayerTurn() -> Bool {
+        // Player moves on even indices (0, 2, 4, ...), engine on odd (1, 3, 5, ...)
+        // This works because the player always plays the side that moves first in the puzzle
+        return currentMoveIndex % 2 == 0
+    }
+
+    // Get the next engine move (the move after the current player move)
+    func getNextEngineMove() -> String? {
+        guard currentMoveIndex + 1 < solutionMoves.count else { return nil }
+        return solutionMoves[currentMoveIndex + 1]
+    }
 }
 

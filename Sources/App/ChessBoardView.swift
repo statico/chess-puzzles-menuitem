@@ -8,6 +8,7 @@ protocol ChessBoardViewDelegate: AnyObject {
 class ChessBoardView: NSView {
     weak var delegate: ChessBoardViewDelegate?
     var engine: ChessEngine?
+    var playerColor: ChessEngine.Color? // The color the player is playing
 
     private(set) var selectedSquare: ChessEngine.Square?
     private var draggedPiece: (piece: ChessEngine.Piece, square: ChessEngine.Square)?
@@ -161,7 +162,14 @@ class ChessBoardView: NSView {
         }
 
         let pieceColor: ChessEngine.Color = piece.isWhite ? .white : .black
-        guard pieceColor == engine.getActiveColor() else { return }
+
+        // If playerColor is set, only allow selecting player's pieces
+        if let playerColor = playerColor {
+            guard pieceColor == playerColor else { return }
+        } else {
+            // Fallback to original behavior: only allow active color
+            guard pieceColor == engine.getActiveColor() else { return }
+        }
 
         selectedSquare = square
         draggedPiece = (piece, square)

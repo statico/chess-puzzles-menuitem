@@ -148,6 +148,11 @@ class PuzzleMenuItemView: NSView {
         engine = ChessEngine(fen: puzzle.fen)
         boardView.setEngine(engine!)
 
+        // Set the player's color so they can only move their pieces
+        if let playerColor = puzzleManager.getPlayerColor() {
+            boardView.playerColor = playerColor
+        }
+
         updateStatusLabel()
         startTimer()
         nextButton.isHidden = true
@@ -160,8 +165,14 @@ class PuzzleMenuItemView: NSView {
 
     private func updateStatusLabel() {
         guard let engine = engine else { return }
-        let color = engine.getActiveColor() == .white ? "White" : "Black"
-        statusLabel.stringValue = "\(color) to move"
+        if puzzleManager.isPlayerTurn() {
+            let playerColor = puzzleManager.getPlayerColor()
+            let colorName = playerColor == .white ? "White" : "Black"
+            statusLabel.stringValue = "Your turn (\(colorName))"
+        } else {
+            let engineColor = engine.getActiveColor() == .white ? "White" : "Black"
+            statusLabel.stringValue = "Engine thinking (\(engineColor))..."
+        }
     }
 
     private func startTimer() {
@@ -310,6 +321,9 @@ extension PuzzleMenuItemView: ChessBoardViewDelegate {
     func chessBoardView(_ view: ChessBoardView, didMakeMove from: ChessEngine.Square, to: ChessEngine.Square) {
         guard let engine = engine else { return }
 
+        // Only allow moves on player's turn
+        guard puzzleManager.isPlayerTurn() else { return }
+
         let move = ChessEngine.Move(from: from, to: to)
         let moveUCI = move.uci
 
@@ -321,8 +335,12 @@ extension PuzzleMenuItemView: ChessBoardViewDelegate {
             boardView.needsDisplay = true
             updateStatusLabel()
 
+            // Check if puzzle is complete after player's move
             if puzzleManager.isPuzzleComplete() {
                 puzzleSolved()
+            } else {
+                // Automatically make the engine's move
+                makeEngineMove()
             }
         } else {
             // Wrong move
@@ -332,8 +350,29 @@ extension PuzzleMenuItemView: ChessBoardViewDelegate {
         }
     }
 
+    private func makeEngineMove() {
+        guard let engine = engine,
+              let engineMoveUCI = puzzleManager.getNextEngineMove(),
+              let engineMove = ChessEngine.Move(fromUCI: engineMoveUCI) else {
+            return
+        }
+
+        // Make the engine move
+        _ = engine.makeMove(engineMove)
+        puzzleManager.advanceToNextMove()
+        boardView.clearSelection()
+        boardView.needsDisplay = true
+        updateStatusLabel()
+
+        // Check if puzzle is complete after engine's move
+        if puzzleManager.isPuzzleComplete() {
+            puzzleSolved()
+        }
+    }
+
     func chessBoardView(_ view: ChessBoardView, shouldHighlightSquare square: ChessEngine.Square) -> Bool {
-        guard let selectedSquare = view.selectedSquare else { return false }
+        guard let selectedSquare = view.selectedSquare,
+              puzzleManager.isPlayerTurn() else { return false }
 
         // For puzzle mode, we'll highlight squares that are part of the solution
         let move = ChessEngine.Move(from: selectedSquare, to: square)
