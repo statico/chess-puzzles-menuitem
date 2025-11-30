@@ -361,30 +361,25 @@ struct ChessBoardView: View {
     }
 
     private func handleTap(location: CGPoint, squareSize: CGFloat, geometry: GeometryProxy) {
-        print("[DEBUG] ChessBoardView.handleTap - location: (\(location.x), \(location.y)), isFlipped: \(isFlipped)")
         guard let square = squareAt(point: location, squareSize: squareSize),
               let engine = engine,
               let piece = engine.getPiece(at: square) else {
-            print("[DEBUG] ChessBoardView.handleTap - invalid square or no piece")
             selectedSquare = nil
             highlightedSquares.removeAll()
             return
         }
 
         let pieceColor: ChessEngine.Color = piece.isWhite ? .white : .black
-        print("[DEBUG] ChessBoardView.handleTap - square: \(square.uci), piece: \(piece), pieceColor: \(pieceColor), playerColor: \(String(describing: playerColor))")
 
         // If playerColor is set, only allow selecting player's pieces
         if let playerColor = playerColor {
             guard pieceColor == playerColor else {
-                print("[DEBUG] ChessBoardView.handleTap - piece color (\(pieceColor)) doesn't match player color (\(playerColor))")
                 return
             }
         } else {
             // Fallback to original behavior: only allow active color
             let activeColor = engine.getActiveColor()
             guard pieceColor == activeColor else {
-                print("[DEBUG] ChessBoardView.handleTap - piece color (\(pieceColor)) doesn't match active color (\(activeColor))")
                 return
             }
         }
@@ -404,13 +399,11 @@ struct ChessBoardView: View {
                 }
             }
             highlightedSquares = legalSquares
-            print("[DEBUG] ChessBoardView.handleTap - highlighted \(legalSquares.count) legal squares")
         }
     }
 
     private func handleDragChanged(value: DragGesture.Value, squareSize: CGFloat, geometry: GeometryProxy) {
         let location = value.location
-        print("[DEBUG] ChessBoardView.handleDragChanged - location: (\(location.x), \(location.y)), isDragging: \(isDragging), isFlipped: \(isFlipped)")
 
         if !isDragging {
             // Start drag
@@ -644,19 +637,27 @@ struct ChessBoardView: View {
     }
 
     private func checkAndStartAnimation(move: (from: ChessEngine.Square, to: ChessEngine.Square), squareSize: CGFloat) {
+        print("[DEBUG] ChessBoardView.checkAndStartAnimation - called for move from \(move.from.uci) to \(move.to.uci)")
         // Check if this is a new move (different from last one)
         if let lastMove = lastAnimateMove,
            lastMove.from == move.from && lastMove.to == move.to {
+            print("[DEBUG] ChessBoardView.checkAndStartAnimation - same move as last, skipping animation")
             return // Same move, don't animate again
         }
 
+        print("[DEBUG] ChessBoardView.checkAndStartAnimation - new move detected, starting animation")
         lastAnimateMove = move
         startAnimation(move: move, squareSize: squareSize)
     }
 
     private func startAnimation(move: (from: ChessEngine.Square, to: ChessEngine.Square), squareSize: CGFloat) {
-        guard let engine = engine,
-              let piece = engine.getPiece(at: move.from) else {
+        guard let engine = engine else {
+            print("[DEBUG] ChessBoardView.startAnimation - no engine")
+            return
+        }
+
+        // Get piece from the current engine state (before move is made)
+        guard let piece = engine.getPiece(at: move.from) else {
             print("[DEBUG] ChessBoardView.startAnimation - no piece at from square \(move.from.uci)")
             return
         }
@@ -665,6 +666,7 @@ struct ChessBoardView: View {
 
         // Start animation
         animatedPiece = (piece: piece, from: move.from, to: move.to, progress: 0.0)
+        print("[DEBUG] ChessBoardView.startAnimation - animatedPiece set, starting SwiftUI animation")
 
         // Animate the piece
         withAnimation(.easeInOut(duration: 0.4)) {
@@ -673,7 +675,7 @@ struct ChessBoardView: View {
 
         // Clear animation after it completes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            print("[DEBUG] ChessBoardView.startAnimation - animation completed")
+            print("[DEBUG] ChessBoardView.startAnimation - animation completed, clearing animatedPiece")
             self.animatedPiece = nil
         }
     }

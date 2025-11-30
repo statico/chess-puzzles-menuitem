@@ -76,14 +76,18 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     func loadNewPuzzle() {
+        print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - called")
         guard let puzzle = puzzleManager.getNextPuzzle() else {
+            print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - no puzzle available")
             statusText = "No puzzles available"
             showMessage("No puzzles available. Please download the puzzle database.", color: .red)
             return
         }
 
+        print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - loading puzzle with FEN: \(puzzle.fen)")
         engine = ChessEngine(fen: puzzle.fen)
         animateMove = nil // Clear any previous animation
+        print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - engine created, animateMove cleared")
 
         // In Lichess format, the first move is the opponent's move - apply it automatically
         if let firstMoveUCI = puzzleManager.getNextEngineMove(),
@@ -92,12 +96,15 @@ class PuzzleMenuItemViewModel: ObservableObject {
             print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - applying first move \(firstMoveUCI) with animation")
             // Trigger animation before making the move
             animateMove = (from: firstMove.from, to: firstMove.to)
-            // Small delay to ensure animation starts
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // Delay engine move until animation completes (0.4s animation + 0.1s buffer)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - animation should be complete, making engine move")
                 _ = engine.makeMove(firstMove)
                 self.puzzleManager.advanceToNextMove()
                 // Track the opponent's last move for highlighting
                 self.opponentLastMove = (from: firstMove.from, to: firstMove.to)
+                // Clear animation trigger
+                self.animateMove = nil
             }
         } else {
             opponentLastMove = nil
@@ -106,8 +113,11 @@ class PuzzleMenuItemViewModel: ObservableObject {
         updateStatusLabel()
         pausedTime = 0
         startTime = nil
+        print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - reset timer, isMenuOpen: \(isMenuOpen)")
         if isMenuOpen {
             startTimer()
+        } else {
+            print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - menu not open, timer will start when menu opens")
         }
         nextButtonTitle = "Skip"
         nextButtonAction = .skip
@@ -123,74 +133,104 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     func updateStatusLabel() {
-        guard let engine = engine else { return }
-        if puzzleManager.isPlayerTurn() {
-            let playerColor = puzzleManager.getPlayerColor()
-            let emoji = playerColor == .white ? "⬜️" : "⬛️"
-            let colorName = playerColor == .white ? "White" : "Black"
-            statusText = "\(emoji) \(colorName) to Move"
-        } else {
-            let engineColor = engine.getActiveColor() == .white ? "White" : "Black"
-            statusText = "Engine thinking (\(engineColor))..."
+        guard engine != nil else {
+            print("[DEBUG] PuzzleMenuItemViewModel.updateStatusLabel - no engine")
+            return
         }
+        let playerColor = puzzleManager.getPlayerColor()
+        let emoji = playerColor == .white ? "⬜️" : "⬛️"
+        let colorName = playerColor == .white ? "White" : "Black"
+        statusText = "\(emoji) \(colorName) to Move"
+        print("[DEBUG] PuzzleMenuItemViewModel.updateStatusLabel - updated to: \(statusText), playerColor: \(String(describing: playerColor)), isPlayerTurn: \(puzzleManager.isPlayerTurn())")
     }
 
     func menuWillOpen() {
+        print("[DEBUG] PuzzleMenuItemViewModel.menuWillOpen - called, current isMenuOpen: \(isMenuOpen), engine: \(engine != nil ? "exists" : "nil")")
         isMenuOpen = true
         if engine != nil {
             startTimer()
+        } else {
+            print("[DEBUG] PuzzleMenuItemViewModel.menuWillOpen - engine is nil, not starting timer")
         }
     }
 
     func menuDidClose() {
+        print("[DEBUG] PuzzleMenuItemViewModel.menuDidClose - called, current isMenuOpen: \(isMenuOpen)")
         isMenuOpen = false
         pauseTimer()
     }
 
     private func startTimer() {
-        guard isMenuOpen else { return }
+        print("[DEBUG] PuzzleMenuItemViewModel.startTimer - called, isMenuOpen: \(isMenuOpen), startTime: \(String(describing: startTime)), pausedTime: \(pausedTime)")
+        guard isMenuOpen else {
+            print("[DEBUG] PuzzleMenuItemViewModel.startTimer - menu not open, aborting")
+            return
+        }
         stopTimer()
 
         // If we have paused time, adjust startTime to account for it
         if pausedTime > 0 {
             startTime = Date().addingTimeInterval(-pausedTime)
+            print("[DEBUG] PuzzleMenuItemViewModel.startTimer - resuming with pausedTime: \(pausedTime), adjusted startTime: \(String(describing: startTime))")
         } else {
             startTime = Date()
+            print("[DEBUG] PuzzleMenuItemViewModel.startTimer - starting fresh, startTime: \(String(describing: startTime))")
         }
 
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
             guard let self = self, self.isMenuOpen else {
+                print("[DEBUG] PuzzleMenuItemViewModel.startTimer - timer callback: menu closed or self deallocated, invalidating")
                 timer.invalidate()
                 return
             }
             self.updateTimer()
         }
         RunLoop.main.add(timer!, forMode: .common)
+        print("[DEBUG] PuzzleMenuItemViewModel.startTimer - timer created and added to run loop")
         updateTimer()
     }
 
     private func pauseTimer() {
-        guard let startTime = startTime else { return }
+        print("[DEBUG] PuzzleMenuItemViewModel.pauseTimer - called, startTime: \(String(describing: startTime))")
+        guard let startTime = startTime else {
+            print("[DEBUG] PuzzleMenuItemViewModel.pauseTimer - no startTime, nothing to pause")
+            return
+        }
         // Calculate total elapsed time including paused time
         let elapsed = Date().timeIntervalSince(startTime)
         pausedTime = elapsed
+        print("[DEBUG] PuzzleMenuItemViewModel.pauseTimer - elapsed time: \(elapsed), pausedTime set to: \(pausedTime)")
         stopTimer()
     }
 
     private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        if timer != nil {
+            print("[DEBUG] PuzzleMenuItemViewModel.stopTimer - invalidating timer")
+            timer?.invalidate()
+            timer = nil
+        } else {
+            print("[DEBUG] PuzzleMenuItemViewModel.stopTimer - timer already nil")
+        }
     }
 
     private func updateTimer() {
         guard let startTime = startTime, isMenuOpen else {
+            if startTime == nil {
+                print("[DEBUG] PuzzleMenuItemViewModel.updateTimer - no startTime, setting to 00:00")
+            } else if !isMenuOpen {
+                print("[DEBUG] PuzzleMenuItemViewModel.updateTimer - menu not open, setting to 00:00")
+            }
             timerText = "00:00"
             return
         }
         let elapsed = Date().timeIntervalSince(startTime)
         let minutes = Int(elapsed) / 60
         let seconds = Int(elapsed) % 60
-        timerText = String(format: "%02d:%02d", minutes, seconds)
+        let newText = String(format: "%02d:%02d", minutes, seconds)
+        if newText != timerText {
+            timerText = newText
+            print("[DEBUG] PuzzleMenuItemViewModel.updateTimer - updated to: \(timerText), elapsed: \(elapsed)s")
+        }
     }
 
     func updateStats() {
@@ -216,7 +256,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
 
     func hintClicked() {
         guard let hint = puzzleManager.getHint() else { return }
-        showMessage("Hint: First move is \(hint)", color: .blue)
+        showMessage("Hint: \(hint)", color: .blue)
     }
 
     func solutionClicked() {
@@ -289,16 +329,25 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     func handleMove(from: ChessEngine.Square, to: ChessEngine.Square) {
-        guard let engine = engine else { return }
+        print("[DEBUG] PuzzleMenuItemViewModel.handleMove - called, from: \(from.uci), to: \(to.uci)")
+        guard let engine = engine else {
+            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - no engine")
+            return
+        }
 
         // Only allow moves on player's turn
-        guard puzzleManager.isPlayerTurn() else { return }
+        guard puzzleManager.isPlayerTurn() else {
+            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - not player's turn, isPlayerTurn: \(puzzleManager.isPlayerTurn())")
+            return
+        }
 
         let move = ChessEngine.Move(from: from, to: to)
         let moveUCI = move.uci
+        print("[DEBUG] PuzzleMenuItemViewModel.handleMove - moveUCI: \(moveUCI)")
 
         // Validate move
         if puzzleManager.validateMove(moveUCI) {
+            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - move validated, making move")
             _ = engine.makeMove(move)
             // Clear opponent's last move highlight since player just moved
             opponentLastMove = nil
@@ -308,13 +357,16 @@ class PuzzleMenuItemViewModel: ObservableObject {
 
             // Check if puzzle is complete after player's move
             if puzzleManager.isPuzzleComplete() {
+                print("[DEBUG] PuzzleMenuItemViewModel.handleMove - puzzle complete after player move")
                 puzzleSolved()
             } else {
                 // Automatically make the engine's move
+                print("[DEBUG] PuzzleMenuItemViewModel.handleMove - puzzle not complete, making engine move")
                 makeEngineMove()
             }
         } else {
             // Wrong move
+            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - move invalid")
             showMessage("Incorrect move. Try again!", color: .red)
         }
     }
@@ -351,14 +403,17 @@ class PuzzleMenuItemViewModel: ObservableObject {
         // Trigger animation before making the move
         animateMove = (from: engineMove.from, to: engineMove.to)
 
-        // Small delay to ensure animation starts, then make the move
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        // Delay engine move until animation completes (0.4s animation + 0.1s buffer)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - animation should be complete, making engine move")
             _ = engine.makeMove(engineMove)
             // Track the opponent's last move for highlighting
             self.opponentLastMove = (from: engineMove.from, to: engineMove.to)
             self.puzzleManager.advanceToNextMove()
             self.updateStatusLabel()
             self.updateNavigationState()
+            // Clear animation trigger
+            self.animateMove = nil
 
             // Check if puzzle is complete after engine's move
             if self.puzzleManager.isPuzzleComplete() {
@@ -368,8 +423,10 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     private func puzzleSolved() {
+        print("[DEBUG] PuzzleMenuItemViewModel.puzzleSolved - called")
         stopTimer()
         let solveTime = Date().timeIntervalSince(startTime ?? Date())
+        print("[DEBUG] PuzzleMenuItemViewModel.puzzleSolved - solveTime: \(solveTime)s")
         statsManager.recordSolve(time: solveTime, wasCorrect: true)
         updateStats()
 
