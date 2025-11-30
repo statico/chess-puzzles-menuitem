@@ -170,6 +170,9 @@ class ChessBoardView: NSView {
             }
         }
 
+        // Draw coordinates
+        drawCoordinates(squareSize: squareSize)
+
         // Draw dragged piece on top
         if let dragged = draggedPiece {
             let squareSize = min(bounds.width, bounds.height) / 8
@@ -180,6 +183,44 @@ class ChessBoardView: NSView {
                 height: squareSize
             )
             drawPiece(dragged.piece, in: rect)
+        }
+    }
+
+    private func drawCoordinates(squareSize: CGFloat) {
+        let fontSize: CGFloat = 10
+        let font = NSFont.systemFont(ofSize: fontSize)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+
+        // Draw file labels (a-h) along the bottom edge
+        let files = ["a", "b", "c", "d", "e", "f", "g", "h"]
+        for (index, file) in files.enumerated() {
+            let x = CGFloat(index) * squareSize + squareSize / 2
+            let y: CGFloat = 2  // Small offset from bottom
+            let string = NSAttributedString(string: file, attributes: attributes)
+            let stringSize = string.size()
+            let point = NSPoint(
+                x: x - stringSize.width / 2,
+                y: y
+            )
+            string.draw(at: point)
+        }
+
+        // Draw rank labels (1-8) along the left edge
+        let ranks = ["1", "2", "3", "4", "5", "6", "7", "8"]
+        for (index, rank) in ranks.enumerated() {
+            // Rank 1 is at the bottom (index 0), rank 8 is at the top (index 7)
+            let y = CGFloat(7 - index) * squareSize + squareSize / 2
+            let x: CGFloat = 2  // Small offset from left
+            let string = NSAttributedString(string: rank, attributes: attributes)
+            let stringSize = string.size()
+            let point = NSPoint(
+                x: x,
+                y: y - stringSize.height / 2
+            )
+            string.draw(at: point)
         }
     }
 
