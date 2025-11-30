@@ -1,0 +1,2 @@
+- Run `make build` after making changes to the code
+- Add debug logging to the code

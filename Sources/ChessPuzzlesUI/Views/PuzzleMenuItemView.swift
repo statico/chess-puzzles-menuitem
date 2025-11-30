@@ -46,6 +46,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
     @Published var animateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
     @Published var canGoBackward: Bool = false
     @Published var canGoForward: Bool = false
+    @Published var isPuzzleSolved: Bool = false
 
     enum NextButtonAction {
         case skip
@@ -113,8 +114,12 @@ class PuzzleMenuItemViewModel: ObservableObject {
         showNextButton = true
         hintButtonEnabled = true
         solutionButtonEnabled = true
+        isPuzzleSolved = false
         updateNavigationState()
         clearMessage()
+
+        // Notify that new puzzle is loaded so menu item can be disabled
+        NotificationCenter.default.post(name: NSNotification.Name("PuzzleLoaded"), object: nil)
     }
 
     func updateStatusLabel() {
@@ -373,6 +378,10 @@ class PuzzleMenuItemViewModel: ObservableObject {
         showNextButton = true
         hintButtonEnabled = false
         solutionButtonEnabled = false
+        isPuzzleSolved = true
+
+        // Notify that puzzle is solved so menu item can be enabled
+        NotificationCenter.default.post(name: NSNotification.Name("PuzzleSolved"), object: nil)
 
         showMessage("Puzzle Solved! Time: \(formatTime(solveTime))", color: .green)
     }

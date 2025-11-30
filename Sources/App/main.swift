@@ -7,10 +7,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var puzzleMenuItemView: PuzzleMenuItemView?
     var puzzleMenuItem: NSMenuItem?
     var statsWindowController: StatsWindowController?
+    var analyzeMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Set activation policy before creating status bar item
         NSApp.setActivationPolicy(.accessory)
+
+        // Observe puzzle solved and loaded notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(puzzleSolvedNotification(_:)),
+            name: NSNotification.Name("PuzzleSolved"),
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(puzzleLoadedNotification(_:)),
+            name: NSNotification.Name("PuzzleLoaded"),
+            object: nil
+        )
 
         // Create status bar item
         statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -194,6 +209,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statsItem.target = self
         menu.addItem(statsItem)
 
+        // Analyze on Chess.com
+        let analyzeItem = NSMenuItem(title: "Analyze on Chess.com...", action: #selector(analyzeOnChessCom), keyEquivalent: "")
+        analyzeItem.target = self
+        analyzeItem.isEnabled = false
+        menu.addItem(analyzeItem)
+        self.analyzeMenuItem = analyzeItem
+
         // Refresh Database
         let refreshItem = NSMenuItem(title: "Refresh Puzzle Database", action: #selector(refreshDatabase), keyEquivalent: "r")
         refreshItem.target = self
@@ -226,6 +248,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         puzzleMenuItemView?.menuWillOpen()
+        updateAnalyzeMenuItem()
+    }
+
+    private func updateAnalyzeMenuItem() {
+        let isComplete = PuzzleManager.shared.isPuzzleComplete()
+        analyzeMenuItem?.isEnabled = isComplete
+    }
+
+    @objc func puzzleSolvedNotification(_ notification: Notification) {
+        updateAnalyzeMenuItem()
+    }
+
+    @objc func puzzleLoadedNotification(_ notification: Notification) {
+        updateAnalyzeMenuItem()
     }
 
     func menuDidClose(_ menu: NSMenu) {
@@ -301,6 +337,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func refreshDatabase() {
         downloadDatabase()
+    }
+
+    @objc func analyzeOnChessCom() {
+        guard let puzzle = PuzzleManager.shared.getCurrentPuzzle() else {
+            return
+        }
+
+        // URL-encode the FEN string
+        let encodedFEN = puzzle.fen.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed) ?? puzzle.fen
+
+        // Construct the chess.com analysis URL
+        let urlString = "https://www.chess.com/analysis?fen=\(encodedFEN)"
+        guard let url = URL(string: urlString) else {
+            return
+        }
+
+        // Open the URL in the default browser
+        NSWorkspace.shared.open(url)
     }
 
     private func checkAndRefreshDatabaseIfNeeded() {

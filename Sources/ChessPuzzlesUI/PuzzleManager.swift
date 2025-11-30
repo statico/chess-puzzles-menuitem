@@ -119,7 +119,7 @@ public class PuzzleManager {
         print("[DEBUG] PuzzleManager.setupCurrentPuzzle - reset move history, solutionMoves count: \(solutionMoves.count)")
     }
 
-    func getCurrentPuzzle() -> Puzzle? {
+    public func getCurrentPuzzle() -> Puzzle? {
         return currentPuzzle
     }
 
@@ -147,7 +147,7 @@ public class PuzzleManager {
         print("[DEBUG] PuzzleManager.advanceToNextMove - added move \(moveUCI) (isPlayer: \(isPlayerMove)), currentMoveIndex: \(currentMoveIndex), historyIndex: \(currentHistoryIndex)")
     }
 
-    func isPuzzleComplete() -> Bool {
+    public func isPuzzleComplete() -> Bool {
         return currentMoveIndex >= solutionMoves.count
     }
 
