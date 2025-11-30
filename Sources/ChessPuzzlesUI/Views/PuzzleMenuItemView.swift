@@ -4,6 +4,7 @@ import AppKit
 // Protocol for dependency injection
 protocol PuzzleManagerProtocol {
     func getNextPuzzle() -> Puzzle?
+    func getCurrentPuzzle() -> Puzzle?
     func getPlayerColor() -> ChessEngine.Color?
     func isPlayerTurn() -> Bool
     func validateMove(_ moveUCI: String) -> Bool
@@ -13,6 +14,11 @@ protocol PuzzleManagerProtocol {
     func getSolution() -> [String]
     func getNextEngineMove() -> String?
     func getOpponentLastMove() -> (from: ChessEngine.Square, to: ChessEngine.Square)?
+    func getCurrentMoveIndex() -> Int
+    func canGoBackward() -> Bool
+    func canGoForward() -> Bool
+    func goBackward() -> (moveUCI: String, isPlayerMove: Bool)?
+    func goForward() -> (moveUCI: String, isPlayerMove: Bool)?
 }
 
 protocol StatsManagerProtocol {
@@ -37,6 +43,9 @@ class PuzzleMenuItemViewModel: ObservableObject {
     @Published var solutionButtonEnabled: Bool = true
     @Published var showNextButton: Bool = true
     @Published var opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
+    @Published var animateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
+    @Published var canGoBackward: Bool = false
+    @Published var canGoForward: Bool = false
 
     enum NextButtonAction {
         case skip
@@ -73,15 +82,22 @@ class PuzzleMenuItemViewModel: ObservableObject {
         }
 
         engine = ChessEngine(fen: puzzle.fen)
+        animateMove = nil // Clear any previous animation
 
         // In Lichess format, the first move is the opponent's move - apply it automatically
         if let firstMoveUCI = puzzleManager.getNextEngineMove(),
            let firstMove = ChessEngine.Move(fromUCI: firstMoveUCI),
            let engine = engine {
-            _ = engine.makeMove(firstMove)
-            puzzleManager.advanceToNextMove()
-            // Track the opponent's last move for highlighting
-            opponentLastMove = (from: firstMove.from, to: firstMove.to)
+            print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - applying first move \(firstMoveUCI) with animation")
+            // Trigger animation before making the move
+            animateMove = (from: firstMove.from, to: firstMove.to)
+            // Small delay to ensure animation starts
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                _ = engine.makeMove(firstMove)
+                self.puzzleManager.advanceToNextMove()
+                // Track the opponent's last move for highlighting
+                self.opponentLastMove = (from: firstMove.from, to: firstMove.to)
+            }
         } else {
             opponentLastMove = nil
         }
@@ -97,6 +113,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
         showNextButton = true
         hintButtonEnabled = true
         solutionButtonEnabled = true
+        updateNavigationState()
         clearMessage()
     }
 
@@ -260,6 +277,12 @@ class PuzzleMenuItemViewModel: ObservableObject {
         messageText = ""
     }
 
+    private func updateNavigationState() {
+        canGoBackward = puzzleManager.canGoBackward()
+        canGoForward = puzzleManager.canGoForward()
+        print("[DEBUG] PuzzleMenuItemViewModel.updateNavigationState - canGoBackward: \(canGoBackward), canGoForward: \(canGoForward)")
+    }
+
     func handleMove(from: ChessEngine.Square, to: ChessEngine.Square) {
         guard let engine = engine else { return }
 
@@ -276,6 +299,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
             opponentLastMove = nil
             puzzleManager.advanceToNextMove()
             updateStatusLabel()
+            updateNavigationState()
 
             // Check if puzzle is complete after player's move
             if puzzleManager.isPuzzleComplete() {
@@ -314,19 +338,27 @@ class PuzzleMenuItemViewModel: ObservableObject {
         guard let engine = engine,
               let engineMoveUCI = puzzleManager.getNextEngineMove(),
               let engineMove = ChessEngine.Move(fromUCI: engineMoveUCI) else {
+            print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - no engine move available")
             return
         }
 
-        // Make the engine move
-        _ = engine.makeMove(engineMove)
-        // Track the opponent's last move for highlighting
-        opponentLastMove = (from: engineMove.from, to: engineMove.to)
-        puzzleManager.advanceToNextMove()
-        updateStatusLabel()
+        print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - animating engine move \(engineMoveUCI)")
+        // Trigger animation before making the move
+        animateMove = (from: engineMove.from, to: engineMove.to)
 
-        // Check if puzzle is complete after engine's move
-        if puzzleManager.isPuzzleComplete() {
-            puzzleSolved()
+        // Small delay to ensure animation starts, then make the move
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            _ = engine.makeMove(engineMove)
+            // Track the opponent's last move for highlighting
+            self.opponentLastMove = (from: engineMove.from, to: engineMove.to)
+            self.puzzleManager.advanceToNextMove()
+            self.updateStatusLabel()
+            self.updateNavigationState()
+
+            // Check if puzzle is complete after engine's move
+            if self.puzzleManager.isPuzzleComplete() {
+                self.puzzleSolved()
+            }
         }
     }
 
@@ -349,6 +381,78 @@ class PuzzleMenuItemViewModel: ObservableObject {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    func navigateBackward() {
+        print("[DEBUG] PuzzleMenuItemViewModel.navigateBackward - called")
+        guard puzzleManager.goBackward() != nil,
+              puzzleManager.getCurrentPuzzle() != nil else {
+            print("[DEBUG] PuzzleMenuItemViewModel.navigateBackward - no move to go back to")
+            return
+        }
+
+        // Rebuild engine state from puzzle FEN and replay moves up to current position
+        rebuildEngineState()
+        updateNavigationState()
+        updateStatusLabel()
+        updateOpponentLastMove()
+        print("[DEBUG] PuzzleMenuItemViewModel.navigateBackward - completed, currentMoveIndex: \(puzzleManager.getCurrentMoveIndex())")
+    }
+
+    func navigateForward() {
+        print("[DEBUG] PuzzleMenuItemViewModel.navigateForward - called")
+        guard let move = puzzleManager.goForward(),
+              let engine = engine,
+              let moveObj = ChessEngine.Move(fromUCI: move.moveUCI) else {
+            print("[DEBUG] PuzzleMenuItemViewModel.navigateForward - no move to go forward to")
+            return
+        }
+
+        // Replay the move in the engine
+        print("[DEBUG] PuzzleMenuItemViewModel.navigateForward - replaying move \(move.moveUCI), isPlayerMove: \(move.isPlayerMove)")
+        _ = engine.makeMove(moveObj)
+
+        // Update opponent last move if it was a computer move
+        if !move.isPlayerMove {
+            opponentLastMove = (from: moveObj.from, to: moveObj.to)
+            // Trigger animation for computer moves
+            animateMove = (from: moveObj.from, to: moveObj.to)
+        } else {
+            opponentLastMove = nil
+        }
+
+        updateNavigationState()
+        updateStatusLabel()
+        print("[DEBUG] PuzzleMenuItemViewModel.navigateForward - completed, currentMoveIndex: \(puzzleManager.getCurrentMoveIndex())")
+    }
+
+    private func rebuildEngineState() {
+        guard let puzzle = puzzleManager.getCurrentPuzzle(),
+              let puzzleMgr = puzzleManager as? PuzzleManager else {
+            print("[DEBUG] PuzzleMenuItemViewModel.rebuildEngineState - no current puzzle or cannot cast")
+            return
+        }
+
+        print("[DEBUG] PuzzleMenuItemViewModel.rebuildEngineState - rebuilding from FEN: \(puzzle.fen)")
+        engine = ChessEngine(fen: puzzle.fen)
+
+        // Replay moves up to currentHistoryIndex
+        let movesToReplay = puzzleMgr.getMovesUpToHistoryIndex()
+        print("[DEBUG] PuzzleMenuItemViewModel.rebuildEngineState - replaying \(movesToReplay.count) moves")
+
+        guard let engine = engine else { return }
+
+        for moveUCI in movesToReplay {
+            if let move = ChessEngine.Move(fromUCI: moveUCI) {
+                _ = engine.makeMove(move)
+            }
+        }
+
+        updateOpponentLastMove()
+    }
+
+    private func updateOpponentLastMove() {
+        opponentLastMove = puzzleManager.getOpponentLastMove()
     }
 
     deinit {
@@ -451,7 +555,8 @@ struct PuzzleMenuItemContentView: View {
                 shouldHighlight: { square, selectedSquare in
                     viewModel.shouldHighlightSquare(square, selectedSquare: selectedSquare)
                 },
-                opponentLastMove: viewModel.opponentLastMove
+                opponentLastMove: viewModel.opponentLastMove,
+                animateMove: viewModel.animateMove
             )
             .frame(width: boardSizeValue, height: boardSizeValue)
             .id("\(boardSettings.boardSize.rawValue)-\(boardSizeValue)")
@@ -466,6 +571,16 @@ struct PuzzleMenuItemContentView: View {
 
             // Buttons row
             HStack(spacing: 10) {
+                Button("<") {
+                    viewModel.navigateBackward()
+                }
+                .disabled(!viewModel.canGoBackward)
+
+                Button(">") {
+                    viewModel.navigateForward()
+                }
+                .disabled(!viewModel.canGoForward)
+
                 Button("Hint") {
                     viewModel.hintClicked()
                 }
@@ -485,6 +600,8 @@ struct PuzzleMenuItemContentView: View {
                             viewModel.nextClicked()
                         }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(viewModel.nextButtonAction == .next ? Color.accentColor : nil)
                 }
             }
             .frame(height: controlHeight)
@@ -784,6 +901,37 @@ private class MockPuzzleManager: PuzzleManagerProtocol {
         if let move = ChessEngine.Move(fromUCI: "e7e5") {
             return (from: move.from, to: move.to)
         }
+        return nil
+    }
+
+    func getCurrentPuzzle() -> Puzzle? {
+        return Puzzle(
+            id: "preview",
+            fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            moves: ["e2e4", "e7e5"],
+            rating: 1500,
+            themes: [],
+            popularity: nil
+        )
+    }
+
+    func getCurrentMoveIndex() -> Int {
+        return 0
+    }
+
+    func canGoBackward() -> Bool {
+        return false
+    }
+
+    func canGoForward() -> Bool {
+        return false
+    }
+
+    func goBackward() -> (moveUCI: String, isPlayerMove: Bool)? {
+        return nil
+    }
+
+    func goForward() -> (moveUCI: String, isPlayerMove: Bool)? {
         return nil
     }
 }

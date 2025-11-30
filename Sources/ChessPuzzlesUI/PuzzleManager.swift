@@ -36,6 +36,8 @@ public class PuzzleManager {
     private var currentPuzzleIndex: Int = 0
     private var solutionMoves: [String] = []
     private var currentMoveIndex: Int = 0
+    private var moveHistory: [(moveUCI: String, isPlayerMove: Bool)] = []
+    private var currentHistoryIndex: Int = -1
     private var difficulty: Difficulty = .normal
     private var userRating: Int = 1500
     private var databaseLoader: PuzzleDatabaseLoader?
@@ -112,6 +114,9 @@ public class PuzzleManager {
         guard let puzzle = currentPuzzle else { return }
         solutionMoves = puzzle.moves
         currentMoveIndex = 0
+        moveHistory = []
+        currentHistoryIndex = -1
+        print("[DEBUG] PuzzleManager.setupCurrentPuzzle - reset move history, solutionMoves count: \(solutionMoves.count)")
     }
 
     func getCurrentPuzzle() -> Puzzle? {
@@ -125,7 +130,21 @@ public class PuzzleManager {
     }
 
     func advanceToNextMove() {
+        guard currentMoveIndex < solutionMoves.count else {
+            print("[DEBUG] PuzzleManager.advanceToNextMove - already at end, currentMoveIndex: \(currentMoveIndex), solutionMoves count: \(solutionMoves.count)")
+            return
+        }
+
+        let moveUCI = solutionMoves[currentMoveIndex]
+        let isPlayerMove = isPlayerTurn()
+
+        // Add to history
+        moveHistory.append((moveUCI: moveUCI, isPlayerMove: isPlayerMove))
+        currentHistoryIndex = moveHistory.count - 1
+
         currentMoveIndex += 1
+
+        print("[DEBUG] PuzzleManager.advanceToNextMove - added move \(moveUCI) (isPlayer: \(isPlayerMove)), currentMoveIndex: \(currentMoveIndex), historyIndex: \(currentHistoryIndex)")
     }
 
     func isPuzzleComplete() -> Bool {
@@ -201,6 +220,67 @@ public class PuzzleManager {
         }
 
         return (from: move.from, to: move.to)
+    }
+
+    // Navigation methods
+    func canGoBackward() -> Bool {
+        let result = currentHistoryIndex > 0
+        print("[DEBUG] PuzzleManager.canGoBackward - returning \(result), currentHistoryIndex: \(currentHistoryIndex)")
+        return result
+    }
+
+    func canGoForward() -> Bool {
+        // Can go forward if there are more moves in history that have been played
+        let result = currentHistoryIndex < moveHistory.count - 1
+        print("[DEBUG] PuzzleManager.canGoForward - returning \(result), currentHistoryIndex: \(currentHistoryIndex), historyCount: \(moveHistory.count)")
+        return result
+    }
+
+    func goBackward() -> (moveUCI: String, isPlayerMove: Bool)? {
+        guard canGoBackward() else {
+            print("[DEBUG] PuzzleManager.goBackward - cannot go backward, currentHistoryIndex: \(currentHistoryIndex)")
+            return nil
+        }
+
+        currentHistoryIndex -= 1
+        let move = moveHistory[currentHistoryIndex]
+
+        // Update currentMoveIndex: undo one move
+        // currentMoveIndex points to the next move to make, so going back means decreasing it
+        currentMoveIndex = max(0, currentMoveIndex - 1)
+
+        print("[DEBUG] PuzzleManager.goBackward - moved to historyIndex: \(currentHistoryIndex), move: \(move.moveUCI), currentMoveIndex: \(currentMoveIndex)")
+        return move
+    }
+
+    func goForward() -> (moveUCI: String, isPlayerMove: Bool)? {
+        guard canGoForward() else {
+            print("[DEBUG] PuzzleManager.goForward - cannot go forward, currentHistoryIndex: \(currentHistoryIndex), historyCount: \(moveHistory.count)")
+            return nil
+        }
+
+        currentHistoryIndex += 1
+        let move = moveHistory[currentHistoryIndex]
+
+        // Update currentMoveIndex: replay one move
+        // currentMoveIndex points to the next move to make, so going forward means increasing it
+        currentMoveIndex += 1
+
+        print("[DEBUG] PuzzleManager.goForward - moved to historyIndex: \(currentHistoryIndex), move: \(move.moveUCI), currentMoveIndex: \(currentMoveIndex)")
+        return move
+    }
+
+    func getHistoryPosition() -> Int {
+        return currentHistoryIndex
+    }
+
+    func getHistoryCount() -> Int {
+        return moveHistory.count
+    }
+
+    func getMovesUpToHistoryIndex() -> [String] {
+        guard currentHistoryIndex >= 0 else { return [] }
+        return Array(moveHistory[0...currentHistoryIndex].map { $0.moveUCI })
     }
 }
 

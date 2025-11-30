@@ -11,6 +11,9 @@ class PuzzleWindowViewModel: ObservableObject {
     @Published var solutionButtonEnabled: Bool = true
     @Published var selectedDifficulty: Difficulty = .normal
     @Published var opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
+    @Published var animateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
+    @Published var canGoBackward: Bool = false
+    @Published var canGoForward: Bool = false
 
     private var puzzleManager = PuzzleManager.shared
     private var statsManager = StatsManager.shared
@@ -29,15 +32,22 @@ class PuzzleWindowViewModel: ObservableObject {
         }
 
         engine = ChessEngine(fen: puzzle.fen)
+        animateMove = nil // Clear any previous animation
 
         // In Lichess format, the first move is the opponent's move - apply it automatically
         if let firstMoveUCI = puzzleManager.getNextEngineMove(),
            let firstMove = ChessEngine.Move(fromUCI: firstMoveUCI),
            let engine = engine {
-            _ = engine.makeMove(firstMove)
-            puzzleManager.advanceToNextMove()
-            // Track the opponent's last move for highlighting
-            opponentLastMove = (from: firstMove.from, to: firstMove.to)
+            print("[DEBUG] PuzzleWindowViewModel.loadNewPuzzle - applying first move \(firstMoveUCI) with animation")
+            // Trigger animation before making the move
+            animateMove = (from: firstMove.from, to: firstMove.to)
+            // Small delay to ensure animation starts
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                _ = engine.makeMove(firstMove)
+                self.puzzleManager.advanceToNextMove()
+                // Track the opponent's last move for highlighting
+                self.opponentLastMove = (from: firstMove.from, to: firstMove.to)
+            }
         } else {
             opponentLastMove = nil
         }
@@ -49,6 +59,7 @@ class PuzzleWindowViewModel: ObservableObject {
         showNextButton = false
         hintButtonEnabled = true
         solutionButtonEnabled = true
+        updateNavigationState()
     }
 
     func updateStatusLabel() {
@@ -177,6 +188,7 @@ class PuzzleWindowViewModel: ObservableObject {
             opponentLastMove = nil
             puzzleManager.advanceToNextMove()
             updateStatusLabel()
+            updateNavigationState()
 
             // Check if puzzle is complete after player's move
             if puzzleManager.isPuzzleComplete() {
@@ -213,19 +225,27 @@ class PuzzleWindowViewModel: ObservableObject {
         guard let engine = engine,
               let engineMoveUCI = puzzleManager.getNextEngineMove(),
               let engineMove = ChessEngine.Move(fromUCI: engineMoveUCI) else {
+            print("[DEBUG] PuzzleWindowViewModel.makeEngineMove - no engine move available")
             return
         }
 
-        // Make the engine move
-        _ = engine.makeMove(engineMove)
-        // Track the opponent's last move for highlighting
-        opponentLastMove = (from: engineMove.from, to: engineMove.to)
-        puzzleManager.advanceToNextMove()
-        updateStatusLabel()
+        print("[DEBUG] PuzzleWindowViewModel.makeEngineMove - animating engine move \(engineMoveUCI)")
+        // Trigger animation before making the move
+        animateMove = (from: engineMove.from, to: engineMove.to)
 
-        // Check if puzzle is complete after engine's move
-        if puzzleManager.isPuzzleComplete() {
-            puzzleSolved()
+        // Small delay to ensure animation starts, then make the move
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            _ = engine.makeMove(engineMove)
+            // Track the opponent's last move for highlighting
+            self.opponentLastMove = (from: engineMove.from, to: engineMove.to)
+            self.puzzleManager.advanceToNextMove()
+            self.updateStatusLabel()
+            self.updateNavigationState()
+
+            // Check if puzzle is complete after engine's move
+            if self.puzzleManager.isPuzzleComplete() {
+                self.puzzleSolved()
+            }
         }
     }
 
@@ -255,6 +275,83 @@ class PuzzleWindowViewModel: ObservableObject {
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+
+    private func updateNavigationState() {
+        canGoBackward = puzzleManager.canGoBackward()
+        canGoForward = puzzleManager.canGoForward()
+        print("[DEBUG] PuzzleWindowViewModel.updateNavigationState - canGoBackward: \(canGoBackward), canGoForward: \(canGoForward)")
+    }
+
+    func navigateBackward() {
+        print("[DEBUG] PuzzleWindowViewModel.navigateBackward - called")
+        guard puzzleManager.goBackward() != nil,
+              puzzleManager.getCurrentPuzzle() != nil else {
+            print("[DEBUG] PuzzleWindowViewModel.navigateBackward - no move to go back to")
+            return
+        }
+
+        // Rebuild engine state from puzzle FEN and replay moves up to current position
+        rebuildEngineState()
+        updateNavigationState()
+        updateStatusLabel()
+        updateOpponentLastMove()
+        print("[DEBUG] PuzzleWindowViewModel.navigateBackward - completed, currentMoveIndex: \(puzzleManager.getCurrentMoveIndex())")
+    }
+
+    func navigateForward() {
+        print("[DEBUG] PuzzleWindowViewModel.navigateForward - called")
+        guard let move = puzzleManager.goForward(),
+              let engine = engine,
+              let moveObj = ChessEngine.Move(fromUCI: move.moveUCI) else {
+            print("[DEBUG] PuzzleWindowViewModel.navigateForward - no move to go forward to")
+            return
+        }
+
+        // Replay the move in the engine
+        print("[DEBUG] PuzzleWindowViewModel.navigateForward - replaying move \(move.moveUCI), isPlayerMove: \(move.isPlayerMove)")
+        _ = engine.makeMove(moveObj)
+
+        // Update opponent last move if it was a computer move
+        if !move.isPlayerMove {
+            opponentLastMove = (from: moveObj.from, to: moveObj.to)
+            // Trigger animation for computer moves
+            animateMove = (from: moveObj.from, to: moveObj.to)
+        } else {
+            opponentLastMove = nil
+        }
+
+        updateNavigationState()
+        updateStatusLabel()
+        print("[DEBUG] PuzzleWindowViewModel.navigateForward - completed, currentMoveIndex: \(puzzleManager.getCurrentMoveIndex())")
+    }
+
+    private func rebuildEngineState() {
+        guard let puzzle = puzzleManager.getCurrentPuzzle() else {
+            print("[DEBUG] PuzzleWindowViewModel.rebuildEngineState - no current puzzle")
+            return
+        }
+
+        print("[DEBUG] PuzzleWindowViewModel.rebuildEngineState - rebuilding from FEN: \(puzzle.fen)")
+        engine = ChessEngine(fen: puzzle.fen)
+
+        // Replay moves up to currentHistoryIndex
+        let movesToReplay = puzzleManager.getMovesUpToHistoryIndex()
+        print("[DEBUG] PuzzleWindowViewModel.rebuildEngineState - replaying \(movesToReplay.count) moves")
+
+        guard let engine = engine else { return }
+
+        for moveUCI in movesToReplay {
+            if let move = ChessEngine.Move(fromUCI: moveUCI) {
+                _ = engine.makeMove(move)
+            }
+        }
+
+        updateOpponentLastMove()
+    }
+
+    private func updateOpponentLastMove() {
+        opponentLastMove = puzzleManager.getOpponentLastMove()
     }
 
     deinit {
@@ -312,12 +409,23 @@ struct PuzzleWindowView: View {
                 shouldHighlight: { square, selectedSquare in
                     viewModel.shouldHighlightSquare(square, selectedSquare: selectedSquare)
                 },
-                opponentLastMove: viewModel.opponentLastMove
+                opponentLastMove: viewModel.opponentLastMove,
+                animateMove: viewModel.animateMove
             )
             .frame(width: 480, height: 480)
 
             // Buttons row
             HStack(spacing: 10) {
+                Button("<") {
+                    viewModel.navigateBackward()
+                }
+                .disabled(!viewModel.canGoBackward)
+
+                Button(">") {
+                    viewModel.navigateForward()
+                }
+                .disabled(!viewModel.canGoForward)
+
                 Button("Hint") {
                     viewModel.hintClicked()
                 }
@@ -332,6 +440,8 @@ struct PuzzleWindowView: View {
                     Button("Next") {
                         viewModel.nextClicked()
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.accentColor)
                 }
             }
             .padding(.horizontal, 60)

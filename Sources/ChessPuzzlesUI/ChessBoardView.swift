@@ -21,6 +21,7 @@ struct ChessBoardView: View {
     var onMove: ((ChessEngine.Square, ChessEngine.Square) -> Void)?
     var shouldHighlight: ((ChessEngine.Square, ChessEngine.Square?) -> Bool)?
     var opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
+    var animateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
 
     @State private var selectedSquare: ChessEngine.Square?
     @State private var draggedPiece: (piece: ChessEngine.Piece, square: ChessEngine.Square)?
@@ -29,6 +30,9 @@ struct ChessBoardView: View {
     @State private var highlightedSquares: Set<ChessEngine.Square> = []
     @State private var boardColor: BoardColor = BoardColor.load()
     @State private var pieceImages: [ChessEngine.Piece: NSImage] = [:]
+    @State private var animatedPiece: (piece: ChessEngine.Piece, from: ChessEngine.Square, to: ChessEngine.Square, progress: CGFloat)? = nil
+    @State private var lastAnimateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
+    @State private var animationTrigger: UUID = UUID()
     var showCoordinates: Bool = true
 
     private let selectedSquareColor = Color(red: 0.5, green: 0.8, blue: 1.0, opacity: 0.6)
@@ -41,7 +45,8 @@ struct ChessBoardView: View {
         showCoordinates: Bool = true,
         onMove: ((ChessEngine.Square, ChessEngine.Square) -> Void)? = nil,
         shouldHighlight: ((ChessEngine.Square, ChessEngine.Square?) -> Bool)? = nil,
-        opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
+        opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil,
+        animateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
     ) {
         self.engine = engine
         self.playerColor = playerColor
@@ -49,6 +54,7 @@ struct ChessBoardView: View {
         self.onMove = onMove
         self.shouldHighlight = shouldHighlight
         self.opponentLastMove = opponentLastMove
+        self.animateMove = animateMove
     }
 
     var body: some View {
@@ -82,13 +88,44 @@ struct ChessBoardView: View {
                     pieceView(piece: dragged.piece, size: squareSize)
                         .position(dragLocation)
                 }
+
+                // Draw animated piece on top
+                if let anim = animatedPiece {
+                    let fromX = CGFloat(anim.from.file) * squareSize + squareSize / 2
+                    let fromY = CGFloat(7 - anim.from.rank) * squareSize + squareSize / 2
+                    let toX = CGFloat(anim.to.file) * squareSize + squareSize / 2
+                    let toY = CGFloat(7 - anim.to.rank) * squareSize + squareSize / 2
+
+                    let currentX = fromX + (toX - fromX) * anim.progress
+                    let currentY = fromY + (toY - fromY) * anim.progress
+
+                    pieceView(piece: anim.piece, size: squareSize)
+                        .position(x: currentX, y: currentY)
+                }
+            }
+            .onAppear {
+                loadImages()
+                boardColor = BoardColor.load()
+            }
+            .onChange(of: animateMove?.from.file) { _ in
+                animationTrigger = UUID()
+            }
+            .onChange(of: animateMove?.from.rank) { _ in
+                animationTrigger = UUID()
+            }
+            .onChange(of: animateMove?.to.file) { _ in
+                animationTrigger = UUID()
+            }
+            .onChange(of: animateMove?.to.rank) { _ in
+                animationTrigger = UUID()
+            }
+            .onChange(of: animationTrigger) { _ in
+                if let move = animateMove {
+                    checkAndStartAnimation(move: move, squareSize: squareSize)
+                }
             }
         }
         .background(Color(white: 0.3))
-        .onAppear {
-            loadImages()
-            boardColor = BoardColor.load()
-        }
         .id(engine?.toFEN() ?? UUID().uuidString)
     }
 
@@ -147,6 +184,11 @@ struct ChessBoardView: View {
 
                 // Skip drawing piece if it's being dragged
                 if let dragged = draggedPiece, dragged.square == square {
+                    continue
+                }
+
+                // Skip drawing piece if it's being animated (it will be drawn separately)
+                if let anim = animatedPiece, anim.from == square {
                     continue
                 }
 
@@ -534,6 +576,41 @@ struct ChessBoardView: View {
     func setBoardColor(_ color: BoardColor) {
         boardColor = color
         boardColor.save()
+    }
+
+    private func checkAndStartAnimation(move: (from: ChessEngine.Square, to: ChessEngine.Square), squareSize: CGFloat) {
+        // Check if this is a new move (different from last one)
+        if let lastMove = lastAnimateMove,
+           lastMove.from == move.from && lastMove.to == move.to {
+            return // Same move, don't animate again
+        }
+
+        lastAnimateMove = move
+        startAnimation(move: move, squareSize: squareSize)
+    }
+
+    private func startAnimation(move: (from: ChessEngine.Square, to: ChessEngine.Square), squareSize: CGFloat) {
+        guard let engine = engine,
+              let piece = engine.getPiece(at: move.from) else {
+            print("[DEBUG] ChessBoardView.startAnimation - no piece at from square \(move.from.uci)")
+            return
+        }
+
+        print("[DEBUG] ChessBoardView.startAnimation - starting animation for piece \(piece) from \(move.from.uci) to \(move.to.uci)")
+
+        // Start animation
+        animatedPiece = (piece: piece, from: move.from, to: move.to, progress: 0.0)
+
+        // Animate the piece
+        withAnimation(.easeInOut(duration: 0.4)) {
+            animatedPiece?.progress = 1.0
+        }
+
+        // Clear animation after it completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            print("[DEBUG] ChessBoardView.startAnimation - animation completed")
+            self.animatedPiece = nil
+        }
     }
 }
 
