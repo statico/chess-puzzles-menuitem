@@ -1,6 +1,6 @@
 import AppKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusBarItem: NSStatusItem?
     var puzzleMenuItemView: PuzzleMenuItemView?
     var puzzleMenuItem: NSMenuItem?
@@ -95,6 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupMenu() {
         let menu = NSMenu()
+        menu.delegate = self
 
         // Create puzzle view menu item
         let puzzleView = PuzzleMenuItemView(frame: .zero)
@@ -185,6 +186,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(creditItem)
 
         statusBarItem?.menu = menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        puzzleMenuItemView?.menuWillOpen()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        puzzleMenuItemView?.menuDidClose()
     }
 
     @objc func newPuzzleClicked() {

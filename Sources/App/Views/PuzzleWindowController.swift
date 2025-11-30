@@ -155,8 +155,9 @@ class PuzzleWindowController: NSWindowController {
         guard let engine = engine else { return }
         if puzzleManager.isPlayerTurn() {
             let playerColor = puzzleManager.getPlayerColor()
+            let emoji = playerColor == .white ? "⬜️" : "⬛️"
             let colorName = playerColor == .white ? "White" : "Black"
-            statusLabel.stringValue = "Your turn (\(colorName))"
+            statusLabel.stringValue = "\(emoji) \(colorName) to Move"
         } else {
             let engineColor = engine.getActiveColor() == .white ? "White" : "Black"
             statusLabel.stringValue = "Engine thinking (\(engineColor))..."
@@ -190,7 +191,23 @@ class PuzzleWindowController: NSWindowController {
 
     private func updateStats() {
         let stats = statsManager.getStats()
-        streakLabel.stringValue = "Streak: \(stats.currentStreak)"
+        let streak = stats.currentStreak
+        let emoji: String
+        switch streak {
+        case 0:
+            emoji = "⚫️"
+        case 1...2:
+            emoji = "🟢"
+        case 3...4:
+            emoji = "🟡"
+        case 5...7:
+            emoji = "🟠"
+        case 8...10:
+            emoji = "🔴"
+        default:
+            emoji = "🔥"
+        }
+        streakLabel.stringValue = "\(emoji) Streak: \(streak)"
     }
 
     @objc private func hintClicked(_ sender: NSButton) {

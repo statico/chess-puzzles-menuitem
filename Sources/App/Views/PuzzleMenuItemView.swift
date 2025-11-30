@@ -5,7 +5,9 @@ class PuzzleMenuItemView: NSView {
     private var statsManager = StatsManager.shared
     private var engine: ChessEngine?
     private var startTime: Date?
+    private var pausedTime: TimeInterval = 0
     private var timer: Timer?
+    private var isMenuOpen: Bool = false
 
     var boardView: ChessBoardView!
     var statusLabel: NSTextField!
@@ -40,18 +42,17 @@ class PuzzleMenuItemView: NSView {
 
         // Layout from top to bottom:
         // - Top padding
-        // - Status row
+        // - Status row (status + timer) - NO GAP
+        // - Board (400px) - directly below header
         // - Spacing
-        // - Message row (for hints, errors, etc.)
-        // - Spacing
-        // - Streak row
+        // - Streak label (below board)
         // - Spacing
         // - Buttons row
         // - Spacing
-        // - Board (400px)
+        // - Message row (for hints, errors, etc.)
         // - Bottom padding
 
-        let totalHeight = padding + controlHeight + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + spacing + boardSize + padding
+        let totalHeight = padding + controlHeight + boardSize + spacing + controlHeight + spacing + controlHeight + spacing + controlHeight + padding
         let totalWidth = boardSize + (padding * 2)
 
         // Set frame to accommodate all content
@@ -74,21 +75,19 @@ class PuzzleMenuItemView: NSView {
         addSubview(timerLabel)
         self.timerLabel = timerLabel
 
-        currentY -= (controlHeight + spacing)
+        // Board view (directly below header, no gap)
+        currentY -= controlHeight
+        // In AppKit, y is the bottom edge, so boardTopY is where the bottom of the board should be
+        // The top of the board will be at boardTopY + boardSize
+        let boardTopY = currentY - boardSize
+        let boardView = ChessBoardView(frame: NSRect(x: padding, y: boardTopY, width: boardSize, height: boardSize))
+        boardView.delegate = self
+        addSubview(boardView)
+        self.boardView = boardView
 
-        // Message label (for hints, errors, success messages)
-        let messageLabel = NSTextField(labelWithString: "")
-        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: controlHeight)
-        messageLabel.font = NSFont.systemFont(ofSize: 12)
-        messageLabel.textColor = NSColor.secondaryLabelColor
-        messageLabel.alignment = .center
-        messageLabel.lineBreakMode = .byTruncatingMiddle
-        addSubview(messageLabel)
-        self.messageLabel = messageLabel
-
-        currentY -= (controlHeight + spacing)
-
-        // Streak label (second row left)
+        // Streak label (below board)
+        // boardTopY is the bottom of the board, so streak goes below it
+        currentY = boardTopY - spacing - controlHeight
         let streakLabel = NSTextField(labelWithString: "Streak: 0")
         streakLabel.frame = NSRect(x: padding, y: currentY, width: 200, height: controlHeight)
         streakLabel.font = NSFont.systemFont(ofSize: 12)
@@ -125,12 +124,15 @@ class PuzzleMenuItemView: NSView {
 
         currentY -= (controlHeight + spacing)
 
-        // Board view (positioned below buttons)
-        let boardY = padding
-        let boardView = ChessBoardView(frame: NSRect(x: padding, y: boardY, width: boardSize, height: boardSize))
-        boardView.delegate = self
-        addSubview(boardView)
-        self.boardView = boardView
+        // Message label (for hints, errors, success messages)
+        let messageLabel = NSTextField(labelWithString: "")
+        messageLabel.frame = NSRect(x: padding, y: currentY, width: totalWidth - (padding * 2), height: controlHeight)
+        messageLabel.font = NSFont.systemFont(ofSize: 12)
+        messageLabel.textColor = NSColor.secondaryLabelColor
+        messageLabel.alignment = .center
+        messageLabel.lineBreakMode = .byTruncatingMiddle
+        addSubview(messageLabel)
+        self.messageLabel = messageLabel
 
         updateStats()
 
@@ -154,7 +156,11 @@ class PuzzleMenuItemView: NSView {
         }
 
         updateStatusLabel()
-        startTimer()
+        pausedTime = 0
+        startTime = nil
+        if isMenuOpen {
+            startTimer()
+        }
         nextButton.isHidden = true
         hintButton.isEnabled = true
         solutionButton.isEnabled = true
@@ -171,21 +177,56 @@ class PuzzleMenuItemView: NSView {
         guard let engine = engine else { return }
         if puzzleManager.isPlayerTurn() {
             let playerColor = puzzleManager.getPlayerColor()
+            let emoji = playerColor == .white ? "⬜️" : "⬛️"
             let colorName = playerColor == .white ? "White" : "Black"
-            statusLabel.stringValue = "Your turn (\(colorName))"
+            statusLabel.stringValue = "\(emoji) \(colorName) to Move"
         } else {
             let engineColor = engine.getActiveColor() == .white ? "White" : "Black"
             statusLabel.stringValue = "Engine thinking (\(engineColor))..."
         }
     }
 
-    private func startTimer() {
-        stopTimer()
-        startTime = Date()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateTimer()
+    func menuWillOpen() {
+        isMenuOpen = true
+        // Start timer if we have a puzzle loaded
+        if engine != nil {
+            startTimer()
         }
+    }
+
+    func menuDidClose() {
+        isMenuOpen = false
+        pauseTimer()
+    }
+
+    private func startTimer() {
+        guard isMenuOpen else { return }
+        stopTimer()
+
+        // If we have paused time, adjust startTime to account for it
+        if pausedTime > 0 {
+            startTime = Date().addingTimeInterval(-pausedTime)
+        } else {
+            startTime = Date()
+        }
+
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
+            guard let self = self, self.isMenuOpen else {
+                timer.invalidate()
+                return
+            }
+            self.updateTimer()
+        }
+        RunLoop.main.add(timer!, forMode: .common)
         updateTimer()
+    }
+
+    private func pauseTimer() {
+        guard let startTime = startTime else { return }
+        // Calculate total elapsed time including paused time
+        let elapsed = Date().timeIntervalSince(startTime)
+        pausedTime = elapsed
+        stopTimer()
     }
 
     private func stopTimer() {
@@ -194,7 +235,7 @@ class PuzzleMenuItemView: NSView {
     }
 
     private func updateTimer() {
-        guard let startTime = startTime else {
+        guard let startTime = startTime, isMenuOpen else {
             timerLabel.stringValue = "00:00"
             return
         }
@@ -206,7 +247,23 @@ class PuzzleMenuItemView: NSView {
 
     private func updateStats() {
         let stats = statsManager.getStats()
-        streakLabel.stringValue = "Streak: \(stats.currentStreak)"
+        let streak = stats.currentStreak
+        let emoji: String
+        switch streak {
+        case 0:
+            emoji = "⚫️"
+        case 1...2:
+            emoji = "🟢"
+        case 3...4:
+            emoji = "🟡"
+        case 5...7:
+            emoji = "🟠"
+        case 8...10:
+            emoji = "🔴"
+        default:
+            emoji = "🔥"
+        }
+        streakLabel.stringValue = "\(emoji) Streak: \(streak)"
     }
 
     @objc private func hintClicked(_ sender: NSButton) {
