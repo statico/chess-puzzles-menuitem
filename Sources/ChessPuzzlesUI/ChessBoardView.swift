@@ -39,6 +39,14 @@ struct ChessBoardView: View {
     private let highlightColor = Color(red: 0.2, green: 0.8, blue: 0.2, opacity: 0.4)
     private let opponentMoveColor = Color(red: 1.0, green: 0.9, blue: 0.0, opacity: 0.5) // Translucent yellow
 
+    // Computed property to determine if board should be flipped (player on bottom)
+    private var isFlipped: Bool {
+        guard let playerColor = playerColor else {
+            return false
+        }
+        return playerColor == .black
+    }
+
     init(
         engine: ChessEngine? = nil,
         playerColor: ChessEngine.Color? = nil,
@@ -91,10 +99,16 @@ struct ChessBoardView: View {
 
                 // Draw animated piece on top
                 if let anim = animatedPiece {
-                    let fromX = CGFloat(anim.from.file) * squareSize + squareSize / 2
-                    let fromY = CGFloat(7 - anim.from.rank) * squareSize + squareSize / 2
-                    let toX = CGFloat(anim.to.file) * squareSize + squareSize / 2
-                    let toY = CGFloat(7 - anim.to.rank) * squareSize + squareSize / 2
+                    // Calculate display positions - flip if needed
+                    let fromDisplayFile = isFlipped ? (7 - anim.from.file) : anim.from.file
+                    let fromDisplayRank = isFlipped ? (7 - anim.from.rank) : anim.from.rank
+                    let toDisplayFile = isFlipped ? (7 - anim.to.file) : anim.to.file
+                    let toDisplayRank = isFlipped ? (7 - anim.to.rank) : anim.to.rank
+
+                    let fromX = CGFloat(fromDisplayFile) * squareSize + squareSize / 2
+                    let fromY = CGFloat(7 - fromDisplayRank) * squareSize + squareSize / 2
+                    let toX = CGFloat(toDisplayFile) * squareSize + squareSize / 2
+                    let toY = CGFloat(7 - toDisplayRank) * squareSize + squareSize / 2
 
                     let currentX = fromX + (toX - fromX) * anim.progress
                     let currentY = fromY + (toY - fromY) * anim.progress
@@ -106,6 +120,10 @@ struct ChessBoardView: View {
             .onAppear {
                 loadImages()
                 boardColor = BoardColor.load()
+                print("[DEBUG] ChessBoardView.body.onAppear - playerColor: \(String(describing: playerColor)), isFlipped: \(isFlipped)")
+                if let engine = engine {
+                    print("[DEBUG] ChessBoardView.body.onAppear - activeColor: \(engine.getActiveColor())")
+                }
             }
             .onChange(of: animateMove?.from.file) { _ in
                 animationTrigger = UUID()
@@ -133,14 +151,19 @@ struct ChessBoardView: View {
         for rank in 0..<8 {
             for file in 0..<8 {
                 let square = ChessEngine.Square(file: file, rank: rank)
+
+                // Calculate display position - flip if needed
+                let displayFile = isFlipped ? (7 - file) : file
+                let displayRank = isFlipped ? (7 - rank) : rank
+
                 let rect = CGRect(
-                    x: CGFloat(file) * squareSize,
-                    y: CGFloat(7 - rank) * squareSize,
+                    x: CGFloat(displayFile) * squareSize,
+                    y: CGFloat(7 - displayRank) * squareSize,
                     width: squareSize,
                     height: squareSize
                 )
 
-                // Choose square color
+                // Choose square color (based on actual board position, not display position)
                 let isLight = (rank + file) % 2 == 0
                 let baseColor = isLight ? boardColor.lightSquareSwiftUIColor : boardColor.darkSquareSwiftUIColor
 
@@ -193,12 +216,16 @@ struct ChessBoardView: View {
                 }
 
                 if let piece = engine.getPiece(at: square) {
+                    // Calculate display position - flip if needed
+                    let displayFile = isFlipped ? (7 - file) : file
+                    let displayRank = isFlipped ? (7 - rank) : rank
+
                     let rect = CGRect(
-                        x: CGFloat(file) * squareSize,
-                        y: CGFloat(7 - rank) * squareSize,
-                width: squareSize,
-                height: squareSize
-            )
+                        x: CGFloat(displayFile) * squareSize,
+                        y: CGFloat(7 - displayRank) * squareSize,
+                        width: squareSize,
+                        height: squareSize
+                    )
 
                     drawPiece(context: context, piece: piece, in: rect)
                 }
@@ -269,8 +296,10 @@ struct ChessBoardView: View {
         let coordinateColor = Color(white: 0.0, opacity: 0.5)
 
         // Draw file labels (a-h) along the bottom edge
+        // When flipped, reverse the order (h-a instead of a-h)
         let files = ["a", "b", "c", "d", "e", "f", "g", "h"]
-        for (index, file) in files.enumerated() {
+        let displayFiles = isFlipped ? files.reversed() : files
+        for (index, file) in displayFiles.enumerated() {
             let x = CGFloat(index) * squareSize + squareSize / 2
             let y: CGFloat = 2
 
@@ -291,8 +320,10 @@ struct ChessBoardView: View {
         }
 
         // Draw rank labels (1-8) along the left edge
+        // When flipped, reverse the order (8-1 instead of 1-8)
         let ranks = ["1", "2", "3", "4", "5", "6", "7", "8"]
-        for (index, rank) in ranks.enumerated() {
+        let displayRanks = isFlipped ? ranks.reversed() : ranks
+        for (index, rank) in displayRanks.enumerated() {
             let y = CGFloat(7 - index) * squareSize + squareSize / 2
             let x: CGFloat = 2
 
@@ -314,35 +345,51 @@ struct ChessBoardView: View {
     }
 
     private func squareAt(point: CGPoint, squareSize: CGFloat) -> ChessEngine.Square? {
-        let file = Int(point.x / squareSize)
-        let rank = 7 - Int(point.y / squareSize)
+        // Convert screen coordinates to display coordinates
+        let displayFile = Int(point.x / squareSize)
+        let displayRank = 7 - Int(point.y / squareSize)
 
-        guard file >= 0 && file < 8 && rank >= 0 && rank < 8 else {
+        guard displayFile >= 0 && displayFile < 8 && displayRank >= 0 && displayRank < 8 else {
             return nil
         }
 
-        return ChessEngine.Square(file: file, rank: rank)
+        // Convert display coordinates back to board coordinates if flipped
+        let boardFile = isFlipped ? (7 - displayFile) : displayFile
+        let boardRank = isFlipped ? (7 - displayRank) : displayRank
+
+        return ChessEngine.Square(file: boardFile, rank: boardRank)
     }
 
     private func handleTap(location: CGPoint, squareSize: CGFloat, geometry: GeometryProxy) {
+        print("[DEBUG] ChessBoardView.handleTap - location: (\(location.x), \(location.y)), isFlipped: \(isFlipped)")
         guard let square = squareAt(point: location, squareSize: squareSize),
               let engine = engine,
               let piece = engine.getPiece(at: square) else {
+            print("[DEBUG] ChessBoardView.handleTap - invalid square or no piece")
             selectedSquare = nil
             highlightedSquares.removeAll()
             return
         }
 
         let pieceColor: ChessEngine.Color = piece.isWhite ? .white : .black
+        print("[DEBUG] ChessBoardView.handleTap - square: \(square.uci), piece: \(piece), pieceColor: \(pieceColor), playerColor: \(String(describing: playerColor))")
 
         // If playerColor is set, only allow selecting player's pieces
         if let playerColor = playerColor {
-            guard pieceColor == playerColor else { return }
+            guard pieceColor == playerColor else {
+                print("[DEBUG] ChessBoardView.handleTap - piece color (\(pieceColor)) doesn't match player color (\(playerColor))")
+                return
+            }
         } else {
             // Fallback to original behavior: only allow active color
-            guard pieceColor == engine.getActiveColor() else { return }
+            let activeColor = engine.getActiveColor()
+            guard pieceColor == activeColor else {
+                print("[DEBUG] ChessBoardView.handleTap - piece color (\(pieceColor)) doesn't match active color (\(activeColor))")
+                return
+            }
         }
 
+        print("[DEBUG] ChessBoardView.handleTap - selecting square: \(square.uci)")
         selectedSquare = square
 
         // Highlight legal moves
@@ -357,30 +404,42 @@ struct ChessBoardView: View {
                 }
             }
             highlightedSquares = legalSquares
+            print("[DEBUG] ChessBoardView.handleTap - highlighted \(legalSquares.count) legal squares")
         }
     }
 
     private func handleDragChanged(value: DragGesture.Value, squareSize: CGFloat, geometry: GeometryProxy) {
         let location = value.location
+        print("[DEBUG] ChessBoardView.handleDragChanged - location: (\(location.x), \(location.y)), isDragging: \(isDragging), isFlipped: \(isFlipped)")
 
         if !isDragging {
             // Start drag
             guard let square = squareAt(point: location, squareSize: squareSize),
                   let engine = engine,
                   let piece = engine.getPiece(at: square) else {
+                print("[DEBUG] ChessBoardView.handleDragChanged - invalid square or no piece")
                 return
             }
 
             let pieceColor: ChessEngine.Color = piece.isWhite ? .white : .black
+            print("[DEBUG] ChessBoardView.handleDragChanged - square: \(square.uci), piece: \(piece), pieceColor: \(pieceColor), playerColor: \(String(describing: playerColor))")
 
             // If playerColor is set, only allow selecting player's pieces
             if let playerColor = playerColor {
-                guard pieceColor == playerColor else { return }
+                guard pieceColor == playerColor else {
+                    print("[DEBUG] ChessBoardView.handleDragChanged - piece color (\(pieceColor)) doesn't match player color (\(playerColor))")
+                    return
+                }
             } else {
                 // Fallback to original behavior: only allow active color
-                guard pieceColor == engine.getActiveColor() else { return }
+                let activeColor = engine.getActiveColor()
+                guard pieceColor == activeColor else {
+                    print("[DEBUG] ChessBoardView.handleDragChanged - piece color (\(pieceColor)) doesn't match active color (\(activeColor))")
+                    return
+                }
             }
 
+            print("[DEBUG] ChessBoardView.handleDragChanged - starting drag from square: \(square.uci)")
             selectedSquare = square
             draggedPiece = (piece, square)
             isDragging = true
@@ -397,6 +456,7 @@ struct ChessBoardView: View {
                     }
                 }
                 highlightedSquares = legalSquares
+                print("[DEBUG] ChessBoardView.handleDragChanged - highlighted \(legalSquares.count) legal squares")
             }
         }
 
@@ -404,7 +464,9 @@ struct ChessBoardView: View {
     }
 
     private func handleDragEnded(value: DragGesture.Value, squareSize: CGFloat, geometry: GeometryProxy) {
+        print("[DEBUG] ChessBoardView.handleDragEnded - location: (\(value.location.x), \(value.location.y)), isFlipped: \(isFlipped)")
         guard let fromSquare = selectedSquare else {
+            print("[DEBUG] ChessBoardView.handleDragEnded - no selected square")
             draggedPiece = nil
             isDragging = false
             selectedSquare = nil
@@ -414,7 +476,10 @@ struct ChessBoardView: View {
 
         let location = value.location
         if let toSquare = squareAt(point: location, squareSize: squareSize), toSquare != fromSquare {
+            print("[DEBUG] ChessBoardView.handleDragEnded - move from \(fromSquare.uci) to \(toSquare.uci)")
             onMove?(fromSquare, toSquare)
+        } else {
+            print("[DEBUG] ChessBoardView.handleDragEnded - invalid destination square or same square")
         }
 
         draggedPiece = nil
