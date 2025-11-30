@@ -12,9 +12,13 @@ let package = Package(
             targets: ["App"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/awxkee/zstd.swift.git", from: "1.0.0")
+    ],
     targets: [
         .executableTarget(
-            name: "App"
+            name: "App",
+            dependencies: [.product(name: "zstd", package: "zstd.swift")]
         )
     ]
 )

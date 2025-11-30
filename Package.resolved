@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "zstd.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/awxkee/zstd.swift.git",
+      "state" : {
+        "revision" : "895dac6adf40f4adf6cd889dbff31958e6fa1203",
+        "version" : "1.0.1"
+      }
+    }
+  ],
+  "version" : 2
+}
