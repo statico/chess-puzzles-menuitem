@@ -20,6 +20,7 @@ struct ChessBoardView: View {
     var playerColor: ChessEngine.Color?
     var onMove: ((ChessEngine.Square, ChessEngine.Square) -> Void)?
     var shouldHighlight: ((ChessEngine.Square, ChessEngine.Square?) -> Bool)?
+    var opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
 
     @State private var selectedSquare: ChessEngine.Square?
     @State private var draggedPiece: (piece: ChessEngine.Piece, square: ChessEngine.Square)?
@@ -32,19 +33,22 @@ struct ChessBoardView: View {
 
     private let selectedSquareColor = Color(red: 0.5, green: 0.8, blue: 1.0, opacity: 0.6)
     private let highlightColor = Color(red: 0.2, green: 0.8, blue: 0.2, opacity: 0.4)
+    private let opponentMoveColor = Color(red: 1.0, green: 0.9, blue: 0.0, opacity: 0.5) // Translucent yellow
 
     init(
         engine: ChessEngine? = nil,
         playerColor: ChessEngine.Color? = nil,
         showCoordinates: Bool = true,
         onMove: ((ChessEngine.Square, ChessEngine.Square) -> Void)? = nil,
-        shouldHighlight: ((ChessEngine.Square, ChessEngine.Square?) -> Bool)? = nil
+        shouldHighlight: ((ChessEngine.Square, ChessEngine.Square?) -> Bool)? = nil,
+        opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
     ) {
         self.engine = engine
         self.playerColor = playerColor
         self.showCoordinates = showCoordinates
         self.onMove = onMove
         self.shouldHighlight = shouldHighlight
+        self.opponentLastMove = opponentLastMove
     }
 
     var body: some View {
@@ -108,6 +112,15 @@ struct ChessBoardView: View {
                     Path(rect),
                     with: .color(baseColor)
                 )
+
+                // Draw opponent's last move highlight (translucent yellow) - draw first so other highlights show on top
+                if let lastMove = opponentLastMove,
+                   (square == lastMove.from || square == lastMove.to) {
+                    context.fill(
+                        Path(rect),
+                        with: .color(opponentMoveColor)
+                    )
+                }
 
                 // Draw selection highlight
                 if let selected = selectedSquare, selected == square {

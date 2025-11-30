@@ -149,27 +149,58 @@ public class PuzzleManager {
         self.puzzles = puzzles
     }
 
-    // Get the player's color (the side that moves first in the puzzle)
+    // Get the player's color (the side that responds to the opponent's move)
+    // In Lichess format, FEN shows position before opponent's move, so player is opposite color
     func getPlayerColor() -> ChessEngine.Color? {
         guard let puzzle = currentPuzzle else { return nil }
         let components = puzzle.fen.components(separatedBy: " ")
+        // FEN shows position before opponent's move, so player is the opposite color
         if components.count > 1 && components[1] == "b" {
-            return .black
+            return .white  // If FEN says black to move, opponent is black, so player is white
         }
-        return .white
+        return .black  // If FEN says white to move, opponent is white, so player is black
     }
 
     // Check if it's the player's turn to move
+    // In Lichess format: opponent moves first (index 0), player responds (index 1), etc.
+    // So player moves on odd indices (1, 3, 5, ...), opponent on even (0, 2, 4, ...)
     func isPlayerTurn() -> Bool {
-        // Player moves on even indices (0, 2, 4, ...), engine on odd (1, 3, 5, ...)
-        // This works because the player always plays the side that moves first in the puzzle
-        return currentMoveIndex % 2 == 0
+        return currentMoveIndex % 2 == 1
     }
 
-    // Get the next engine move (the move after the current player move)
+    // Get the next opponent/engine move (the move at the current index if it's opponent's turn)
     func getNextEngineMove() -> String? {
-        guard currentMoveIndex + 1 < solutionMoves.count else { return nil }
-        return solutionMoves[currentMoveIndex + 1]
+        guard currentMoveIndex < solutionMoves.count else { return nil }
+        return solutionMoves[currentMoveIndex]
+    }
+
+    // Get the opponent's last move for highlighting
+    // Returns the squares (from, to) of the last opponent move, or nil if no opponent move yet
+    func getOpponentLastMove() -> (from: ChessEngine.Square, to: ChessEngine.Square)? {
+        // Opponent moves on even indices (0, 2, 4, ...)
+        // The last opponent move would be at the highest even index < currentMoveIndex
+        // But since we advance after making moves, if currentMoveIndex is odd, the last opponent move was at currentMoveIndex - 1
+        // If currentMoveIndex is even, the last opponent move was at currentMoveIndex - 2
+
+        let lastOpponentIndex: Int
+        if currentMoveIndex % 2 == 0 {
+            // Currently opponent's turn, so last opponent move was 2 moves ago
+            lastOpponentIndex = currentMoveIndex - 2
+        } else {
+            // Currently player's turn, so last opponent move was 1 move ago
+            lastOpponentIndex = currentMoveIndex - 1
+        }
+
+        guard lastOpponentIndex >= 0 && lastOpponentIndex < solutionMoves.count else {
+            return nil
+        }
+
+        let moveUCI = solutionMoves[lastOpponentIndex]
+        guard let move = ChessEngine.Move(fromUCI: moveUCI) else {
+            return nil
+        }
+
+        return (from: move.from, to: move.to)
     }
 }
 

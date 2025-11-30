@@ -10,6 +10,7 @@ class PuzzleWindowViewModel: ObservableObject {
     @Published var hintButtonEnabled: Bool = true
     @Published var solutionButtonEnabled: Bool = true
     @Published var selectedDifficulty: Difficulty = .normal
+    @Published var opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
 
     private var puzzleManager = PuzzleManager.shared
     private var statsManager = StatsManager.shared
@@ -28,6 +29,18 @@ class PuzzleWindowViewModel: ObservableObject {
         }
 
         engine = ChessEngine(fen: puzzle.fen)
+
+        // In Lichess format, the first move is the opponent's move - apply it automatically
+        if let firstMoveUCI = puzzleManager.getNextEngineMove(),
+           let firstMove = ChessEngine.Move(fromUCI: firstMoveUCI),
+           let engine = engine {
+            _ = engine.makeMove(firstMove)
+            puzzleManager.advanceToNextMove()
+            // Track the opponent's last move for highlighting
+            opponentLastMove = (from: firstMove.from, to: firstMove.to)
+        } else {
+            opponentLastMove = nil
+        }
 
         // Player color will be passed to the board view
 
@@ -160,6 +173,8 @@ class PuzzleWindowViewModel: ObservableObject {
         // Validate move
         if puzzleManager.validateMove(moveUCI) {
             _ = engine.makeMove(move)
+            // Clear opponent's last move highlight since player just moved
+            opponentLastMove = nil
             puzzleManager.advanceToNextMove()
             updateStatusLabel()
 
@@ -203,6 +218,8 @@ class PuzzleWindowViewModel: ObservableObject {
 
         // Make the engine move
         _ = engine.makeMove(engineMove)
+        // Track the opponent's last move for highlighting
+        opponentLastMove = (from: engineMove.from, to: engineMove.to)
         puzzleManager.advanceToNextMove()
         updateStatusLabel()
 
@@ -294,7 +311,8 @@ struct PuzzleWindowView: View {
                 },
                 shouldHighlight: { square, selectedSquare in
                     viewModel.shouldHighlightSquare(square, selectedSquare: selectedSquare)
-                }
+                },
+                opponentLastMove: viewModel.opponentLastMove
             )
             .frame(width: 480, height: 480)
 

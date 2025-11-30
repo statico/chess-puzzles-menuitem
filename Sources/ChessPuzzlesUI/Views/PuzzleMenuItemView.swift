@@ -12,6 +12,7 @@ protocol PuzzleManagerProtocol {
     func getHint() -> String?
     func getSolution() -> [String]
     func getNextEngineMove() -> String?
+    func getOpponentLastMove() -> (from: ChessEngine.Square, to: ChessEngine.Square)?
 }
 
 protocol StatsManagerProtocol {
@@ -35,6 +36,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
     @Published var hintButtonEnabled: Bool = true
     @Published var solutionButtonEnabled: Bool = true
     @Published var showNextButton: Bool = true
+    @Published var opponentLastMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
 
     enum NextButtonAction {
         case skip
@@ -71,6 +73,19 @@ class PuzzleMenuItemViewModel: ObservableObject {
         }
 
         engine = ChessEngine(fen: puzzle.fen)
+
+        // In Lichess format, the first move is the opponent's move - apply it automatically
+        if let firstMoveUCI = puzzleManager.getNextEngineMove(),
+           let firstMove = ChessEngine.Move(fromUCI: firstMoveUCI),
+           let engine = engine {
+            _ = engine.makeMove(firstMove)
+            puzzleManager.advanceToNextMove()
+            // Track the opponent's last move for highlighting
+            opponentLastMove = (from: firstMove.from, to: firstMove.to)
+        } else {
+            opponentLastMove = nil
+        }
+
         updateStatusLabel()
         pausedTime = 0
         startTime = nil
@@ -257,6 +272,8 @@ class PuzzleMenuItemViewModel: ObservableObject {
         // Validate move
         if puzzleManager.validateMove(moveUCI) {
             _ = engine.makeMove(move)
+            // Clear opponent's last move highlight since player just moved
+            opponentLastMove = nil
             puzzleManager.advanceToNextMove()
             updateStatusLabel()
 
@@ -302,6 +319,8 @@ class PuzzleMenuItemViewModel: ObservableObject {
 
         // Make the engine move
         _ = engine.makeMove(engineMove)
+        // Track the opponent's last move for highlighting
+        opponentLastMove = (from: engineMove.from, to: engineMove.to)
         puzzleManager.advanceToNextMove()
         updateStatusLabel()
 
@@ -431,7 +450,8 @@ struct PuzzleMenuItemContentView: View {
                 },
                 shouldHighlight: { square, selectedSquare in
                     viewModel.shouldHighlightSquare(square, selectedSquare: selectedSquare)
-                }
+                },
+                opponentLastMove: viewModel.opponentLastMove
             )
             .frame(width: boardSizeValue, height: boardSizeValue)
             .id("\(boardSettings.boardSize.rawValue)-\(boardSizeValue)")
@@ -758,6 +778,13 @@ private class MockPuzzleManager: PuzzleManagerProtocol {
 
     func getNextEngineMove() -> String? {
         return "e7e5"
+    }
+
+    func getOpponentLastMove() -> (from: ChessEngine.Square, to: ChessEngine.Square)? {
+        if let move = ChessEngine.Move(fromUCI: "e7e5") {
+            return (from: move.from, to: move.to)
+        }
+        return nil
     }
 }
 
