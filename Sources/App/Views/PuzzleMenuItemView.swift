@@ -37,7 +37,7 @@ class PuzzleMenuItemView: NSView {
         // Total view size: 400px board + padding + controls
         let boardSize: CGFloat = 400
         let padding: CGFloat = 20
-        let controlHeight: CGFloat = 30
+        let controlHeight: CGFloat = 20
         let spacing: CGFloat = 10
 
         // Layout from top to bottom:
@@ -87,7 +87,7 @@ class PuzzleMenuItemView: NSView {
 
         // Streak label (below board)
         // boardTopY is the bottom of the board, so streak goes below it
-        currentY = boardTopY - spacing - controlHeight
+        currentY = boardTopY - spacing * 2 - controlHeight
         let streakLabel = NSTextField(labelWithString: "Streak: 0")
         streakLabel.frame = NSRect(x: padding, y: currentY, width: 200, height: controlHeight)
         streakLabel.font = NSFont.systemFont(ofSize: 12)
@@ -114,13 +114,14 @@ class PuzzleMenuItemView: NSView {
         addSubview(solutionButton)
         self.solutionButton = solutionButton
 
-        // Next button (initially hidden)
-        let nextButton = NSButton(title: "Next", target: self, action: #selector(nextClicked(_:)))
-        nextButton.frame = NSRect(x: padding + (buttonWidth + buttonSpacing) * 2, y: currentY, width: buttonWidth, height: controlHeight)
-        nextButton.bezelStyle = .rounded
-        nextButton.isHidden = true
-        addSubview(nextButton)
-        self.nextButton = nextButton
+        // Skip/Next button (starts as Skip, changes to Next when solved)
+        let skipButton = NSButton(title: "Skip", target: self, action: #selector(skipClicked(_:)))
+        skipButton.frame = NSRect(x: padding + (buttonWidth + buttonSpacing) * 2, y: currentY, width: buttonWidth, height: controlHeight)
+        skipButton.bezelStyle = .rounded
+        addSubview(skipButton)
+        self.nextButton = skipButton
+        // Store the skip action for later restoration
+        skipButton.tag = 1  // Tag 1 = Skip mode
 
         currentY -= (controlHeight + spacing)
 
@@ -161,7 +162,10 @@ class PuzzleMenuItemView: NSView {
         if isMenuOpen {
             startTimer()
         }
-        nextButton.isHidden = true
+        nextButton.title = "Skip"
+        nextButton.action = #selector(skipClicked(_:))
+        nextButton.tag = 1
+        nextButton.isHidden = false
         hintButton.isEnabled = true
         solutionButton.isEnabled = true
         clearMessage()
@@ -280,6 +284,9 @@ class PuzzleMenuItemView: NSView {
 
     private func showSolution() {
         stopTimer()
+        nextButton.title = "Next"
+        nextButton.action = #selector(nextClicked(_:))
+        nextButton.tag = 2  // Tag 2 = Next mode
         nextButton.isHidden = false
         hintButton.isEnabled = false
         solutionButton.isEnabled = false
@@ -306,6 +313,10 @@ class PuzzleMenuItemView: NSView {
             }
         }
         makeNextMove()
+    }
+
+    @objc private func skipClicked(_ sender: NSButton) {
+        loadNewPuzzle()
     }
 
     @objc private func nextClicked(_ sender: NSButton) {
@@ -359,6 +370,9 @@ class PuzzleMenuItemView: NSView {
         statsManager.recordSolve(time: solveTime, wasCorrect: true)
         updateStats()
 
+        nextButton.title = "Next"
+        nextButton.action = #selector(nextClicked(_:))
+        nextButton.tag = 2  // Tag 2 = Next mode
         nextButton.isHidden = false
         hintButton.isEnabled = false
         solutionButton.isEnabled = false

@@ -189,9 +189,12 @@ class ChessBoardView: NSView {
     private func drawCoordinates(squareSize: CGFloat) {
         let fontSize: CGFloat = 10
         let font = NSFont.systemFont(ofSize: fontSize)
+
+        // Single color for all coordinates: 50% opacity black
+        let coordinateColor = NSColor(white: 0.0, alpha: 0.5)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: NSColor.secondaryLabelColor
+            .foregroundColor: coordinateColor
         ]
 
         // Draw file labels (a-h) along the bottom edge

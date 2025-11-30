@@ -108,14 +108,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // New Puzzle
-        let newPuzzleItem = NSMenuItem(title: "New Puzzle", action: #selector(newPuzzleClicked), keyEquivalent: "n")
-        newPuzzleItem.target = self
-        menu.addItem(newPuzzleItem)
+        // Settings submenu
+        let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+        let settingsSubmenu = NSMenu()
 
-        menu.addItem(NSMenuItem.separator())
-
-        // Difficulty submenu
+        // Difficulty submenu (within Settings)
         let difficultyItem = NSMenuItem(title: "Difficulty", action: nil, keyEquivalent: "")
         let difficultySubmenu = NSMenu()
 
@@ -130,11 +127,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         difficultyItem.submenu = difficultySubmenu
-        menu.addItem(difficultyItem)
+        settingsSubmenu.addItem(difficultyItem)
 
-        menu.addItem(NSMenuItem.separator())
+        settingsSubmenu.addItem(NSMenuItem.separator())
 
-        // Board Color submenu
+        // Board Color submenu (within Settings)
         let boardColorItem = NSMenuItem(title: "Board Color", action: nil, keyEquivalent: "")
         let boardColorSubmenu = NSMenu()
 
@@ -149,7 +146,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         boardColorItem.submenu = boardColorSubmenu
-        menu.addItem(boardColorItem)
+        settingsSubmenu.addItem(boardColorItem)
+
+        settingsItem.submenu = settingsSubmenu
+        menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -196,16 +196,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         puzzleMenuItemView?.menuDidClose()
     }
 
-    @objc func newPuzzleClicked() {
-        puzzleMenuItemView?.loadNewPuzzle()
-    }
 
     @objc func difficultySelected(_ sender: NSMenuItem) {
         guard let difficulty = sender.representedObject as? Difficulty else { return }
         PuzzleManager.shared.setDifficulty(difficulty)
 
-        // Update menu state
-        if let difficultyMenu = statusBarItem?.menu?.item(withTitle: "Difficulty")?.submenu {
+        // Update menu state (now under Settings submenu)
+        if let settingsMenu = statusBarItem?.menu?.item(withTitle: "Settings")?.submenu,
+           let difficultyMenu = settingsMenu.item(withTitle: "Difficulty")?.submenu {
             for item in difficultyMenu.items {
                 item.state = (item.representedObject as? Difficulty == difficulty) ? .on : .off
             }
@@ -222,8 +220,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Update all ChessBoardView instances
         puzzleMenuItemView?.setBoardColor(color)
 
-        // Update menu state
-        if let boardColorMenu = statusBarItem?.menu?.item(withTitle: "Board Color")?.submenu {
+        // Update menu state (now under Settings submenu)
+        if let settingsMenu = statusBarItem?.menu?.item(withTitle: "Settings")?.submenu,
+           let boardColorMenu = settingsMenu.item(withTitle: "Board Color")?.submenu {
             for item in boardColorMenu.items {
                 item.state = (item.representedObject as? BoardColor == color) ? .on : .off
             }
