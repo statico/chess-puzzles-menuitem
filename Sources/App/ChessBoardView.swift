@@ -15,8 +15,9 @@ class ChessBoardView: NSView {
     private var dragOffset: NSPoint = .zero
     private var highlightedSquares: Set<ChessEngine.Square> = []
 
-    private let lightSquareColor = NSColor(red: 0.96, green: 0.96, blue: 0.86, alpha: 1.0)
-    private let darkSquareColor = NSColor(red: 0.76, green: 0.60, blue: 0.42, alpha: 1.0)
+    private var boardColor: BoardColor = BoardColor.load()
+    private var pieceImages: [ChessEngine.Piece: NSImage] = [:]
+
     private let selectedSquareColor = NSColor(red: 0.5, green: 0.8, blue: 1.0, alpha: 0.6)
     private let highlightColor = NSColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 0.4)
 
@@ -33,6 +34,75 @@ class ChessBoardView: NSView {
     private func setupView() {
         wantsLayer = true
         layer?.backgroundColor = NSColor.darkGray.cgColor
+        boardColor = BoardColor.load()
+        loadImages()
+    }
+
+    func setBoardColor(_ color: BoardColor) {
+        boardColor = color
+        boardColor.save()
+        needsDisplay = true
+    }
+
+    private func loadImages() {
+        loadPieceImages()
+    }
+
+    private func loadPieceImages() {
+        let pieces: [(ChessEngine.Piece, String)] = [
+            (.whiteKing, "w_king_png_shadow_512px"),
+            (.whiteQueen, "w_queen_png_shadow_512px"),
+            (.whiteRook, "w_rook_png_shadow_512px"),
+            (.whiteBishop, "w_bishop_png_shadow_512px"),
+            (.whiteKnight, "w_knight_png_shadow_512px"),
+            (.whitePawn, "w_pawn_png_shadow_512px"),
+            (.blackKing, "b_king_png_shadow_512px"),
+            (.blackQueen, "b_queen_png_shadow_512px"),
+            (.blackRook, "b_rook_png_shadow_512px"),
+            (.blackBishop, "b_bishop_png_shadow_512px"),
+            (.blackKnight, "b_knight_png_shadow_512px"),
+            (.blackPawn, "b_pawn_png_shadow_512px")
+        ]
+
+        for (piece, fileName) in pieces {
+            if let image = loadImage(named: fileName, inDirectory: "ChessPieces") {
+                pieceImages[piece] = image
+            }
+        }
+    }
+
+
+    private func loadImage(named name: String, inDirectory directory: String) -> NSImage? {
+        var url: URL?
+
+        // Swift Package Manager's .process() flattens the directory structure
+        // So files are in the bundle root, not in subdirectories
+        // Try without subdirectory first (flattened structure)
+        if let bundleUrl = Bundle.module.url(forResource: name, withExtension: "png") {
+            url = bundleUrl
+        } else if let bundleUrl = Bundle.main.url(forResource: name, withExtension: "png") {
+            url = bundleUrl
+        } else if let resourcePath = Bundle.module.resourcePath {
+            // Try root first (flattened)
+            let filePath = (resourcePath as NSString).appendingPathComponent("\(name).png")
+            if FileManager.default.fileExists(atPath: filePath) {
+                url = URL(fileURLWithPath: filePath)
+            } else {
+                // Try with subdirectory (in case structure is preserved)
+                let dirPath = (resourcePath as NSString).appendingPathComponent(directory)
+                let filePathWithDir = (dirPath as NSString).appendingPathComponent("\(name).png")
+                if FileManager.default.fileExists(atPath: filePathWithDir) {
+                    url = URL(fileURLWithPath: filePathWithDir)
+                }
+            }
+        }
+
+        guard let fileURL = url else {
+            return nil
+        }
+
+        // Load PNG image
+        return NSImage(contentsOf: fileURL)
     }
 
     func setEngine(_ engine: ChessEngine) {
@@ -71,18 +141,26 @@ class ChessBoardView: NSView {
 
                 // Choose square color
                 let isLight = (rank + file) % 2 == 0
-                let baseColor = isLight ? lightSquareColor : darkSquareColor
-
-                // Apply selection highlight
-                if let selected = selectedSquare, selected == square {
-                    selectedSquareColor.setFill()
-                } else if highlightedSquares.contains(square) {
-                    highlightColor.setFill()
-                } else {
-                    baseColor.setFill()
-                }
-
+                let baseColor = isLight ? boardColor.lightSquareColor : boardColor.darkSquareColor
+                baseColor.setFill()
                 NSBezierPath(rect: rect).fill()
+
+                // Apply selection highlight overlay
+                if let selected = selectedSquare, selected == square {
+                    let context = NSGraphicsContext.current
+                    context?.saveGraphicsState()
+                    context?.compositingOperation = .sourceOver
+                    selectedSquareColor.setFill()
+                    NSBezierPath(rect: rect).fill()
+                    context?.restoreGraphicsState()
+                } else if highlightedSquares.contains(square) {
+                    let context = NSGraphicsContext.current
+                    context?.saveGraphicsState()
+                    context?.compositingOperation = .sourceOver
+                    highlightColor.setFill()
+                    NSBezierPath(rect: rect).fill()
+                    context?.restoreGraphicsState()
+                }
 
                 // Draw piece
                 if let piece = engine.getPiece(at: square),
@@ -106,6 +184,23 @@ class ChessBoardView: NSView {
     }
 
     private func drawPiece(_ piece: ChessEngine.Piece, in rect: NSRect) {
+        guard piece != .empty else { return }
+
+        // Try to use image first
+        if let image = pieceImages[piece] {
+            let padding: CGFloat = rect.height * 0.1
+            let imageRect = NSRect(
+                x: rect.origin.x + padding,
+                y: rect.origin.y + padding,
+                width: rect.width - padding * 2,
+                height: rect.height - padding * 2
+            )
+            // Use proper drawing method for NSImage
+            image.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+            return
+        }
+
+        // Fallback to Unicode symbols if images not loaded
         let pieceSymbol: String
         switch piece {
         case .whiteKing: pieceSymbol = "♔"

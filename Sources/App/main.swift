@@ -13,31 +13,72 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create status bar item
         statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        // Set menu bar icon (using chess knight symbol)
+        // Set menu bar icon (using chess knight PNG - no shadow)
         if let button = statusBarItem?.button {
-            // Create a larger icon from the Unicode chess knight character
             let iconSize: CGFloat = 22
-            let image = NSImage(size: NSSize(width: iconSize, height: iconSize))
-            image.lockFocus()
 
-            // Draw the chess knight character at a larger size
-            let font = NSFont.systemFont(ofSize: iconSize)
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: NSColor.labelColor
-            ]
-            let attributedString = NSAttributedString(string: "♞", attributes: attributes)
-            let stringSize = attributedString.size()
-            let point = NSPoint(
-                x: (iconSize - stringSize.width) / 2,
-                y: (iconSize - stringSize.height) / 2 - 1 // Slight vertical adjustment
-            )
-            attributedString.draw(at: point)
+            // Load the knight PNG (no shadow version for menu bar)
+            // Swift Package Manager's .process() flattens the directory structure
+            var knightImage: NSImage?
 
-            image.unlockFocus()
-            image.isTemplate = true
+            // Try without subdirectory first (flattened structure)
+            if let url = Bundle.module.url(forResource: "w_knight_NoShadow", withExtension: "png") {
+                knightImage = NSImage(contentsOf: url)
+            } else if let url = Bundle.main.url(forResource: "w_knight_NoShadow", withExtension: "png") {
+                knightImage = NSImage(contentsOf: url)
+            } else if let resourcePath = Bundle.module.resourcePath {
+                // Try root first
+                let filePath = (resourcePath as NSString).appendingPathComponent("w_knight_NoShadow.png")
+                if FileManager.default.fileExists(atPath: filePath) {
+                    knightImage = NSImage(contentsOfFile: filePath)
+                } else {
+                    // Try with subdirectory
+                    let dirPath = (resourcePath as NSString).appendingPathComponent("ChessPieces")
+                    let filePathWithDir = (dirPath as NSString).appendingPathComponent("w_knight_NoShadow.png")
+                    if FileManager.default.fileExists(atPath: filePathWithDir) {
+                        knightImage = NSImage(contentsOfFile: filePathWithDir)
+                    }
+                }
+            }
 
-            button.image = image
+            if let knightImage = knightImage {
+                // Resize to menu bar size
+                let image = NSImage(size: NSSize(width: iconSize, height: iconSize))
+                image.lockFocus()
+
+                // Draw the knight centered and scaled
+                let drawRect = NSRect(
+                    x: iconSize * 0.1,
+                    y: iconSize * 0.1,
+                    width: iconSize * 0.8,
+                    height: iconSize * 0.8
+                )
+                knightImage.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+
+                image.unlockFocus()
+                image.isTemplate = true
+                button.image = image
+            } else {
+                // Fallback to Unicode if PNG fails to load
+                let image = NSImage(size: NSSize(width: iconSize, height: iconSize))
+                image.lockFocus()
+                let font = NSFont.systemFont(ofSize: iconSize)
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: NSColor.labelColor
+                ]
+                let attributedString = NSAttributedString(string: "♞", attributes: attributes)
+                let stringSize = attributedString.size()
+                let point = NSPoint(
+                    x: (iconSize - stringSize.width) / 2,
+                    y: (iconSize - stringSize.height) / 2 - 1
+                )
+                attributedString.draw(at: point)
+                image.unlockFocus()
+                image.isTemplate = true
+                button.image = image
+            }
+
             button.imagePosition = .imageLeading
             button.title = ""
         }
@@ -92,6 +133,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        // Board Color submenu
+        let boardColorItem = NSMenuItem(title: "Board Color", action: nil, keyEquivalent: "")
+        let boardColorSubmenu = NSMenu()
+
+        for color in BoardColor.allCases {
+            let item = NSMenuItem(title: color.rawValue, action: #selector(boardColorSelected(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = color
+            if color == BoardColor.load() {
+                item.state = .on
+            }
+            boardColorSubmenu.addItem(item)
+        }
+
+        boardColorItem.submenu = boardColorSubmenu
+        menu.addItem(boardColorItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         // Statistics
         let statsItem = NSMenuItem(title: "Statistics", action: #selector(showStatistics), keyEquivalent: "s")
         statsItem.target = self
@@ -108,6 +168,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let quitMenuItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
         quitMenuItem.target = self
         menu.addItem(quitMenuItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Credit menu item (disabled, small text)
+        let creditItem = NSMenuItem(title: "Chess pieces by JohnPablok (CC-BY-SA 3.0)", action: nil, keyEquivalent: "")
+        creditItem.isEnabled = false
+        let attributedTitle = NSAttributedString(
+            string: "Chess pieces by JohnPablok (CC-BY-SA 3.0)",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 10),
+                .foregroundColor: NSColor.secondaryLabelColor
+            ]
+        )
+        creditItem.attributedTitle = attributedTitle
+        menu.addItem(creditItem)
 
         statusBarItem?.menu = menu
     }
@@ -129,6 +204,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Reload puzzle if view exists
         puzzleMenuItemView?.loadNewPuzzle()
+    }
+
+    @objc func boardColorSelected(_ sender: NSMenuItem) {
+        guard let color = sender.representedObject as? BoardColor else { return }
+        color.save()
+
+        // Update all ChessBoardView instances
+        puzzleMenuItemView?.setBoardColor(color)
+
+        // Update menu state
+        if let boardColorMenu = statusBarItem?.menu?.item(withTitle: "Board Color")?.submenu {
+            for item in boardColorMenu.items {
+                item.state = (item.representedObject as? BoardColor == color) ? .on : .off
+            }
+        }
     }
 
     @objc func showStatistics() {

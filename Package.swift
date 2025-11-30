@@ -18,7 +18,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "App",
-            dependencies: [.product(name: "zstd", package: "zstd.swift")]
+            dependencies: [.product(name: "zstd", package: "zstd.swift")],
+            resources: [
+                .process("Resources"),
+                .process("Assets.xcassets")
+            ]
         )
     ]
 )

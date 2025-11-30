@@ -163,6 +163,10 @@ class PuzzleMenuItemView: NSView {
         boardView.clearSelection()
     }
 
+    func setBoardColor(_ color: BoardColor) {
+        boardView.setBoardColor(color)
+    }
+
     private func updateStatusLabel() {
         guard let engine = engine else { return }
         if puzzleManager.isPlayerTurn() {
