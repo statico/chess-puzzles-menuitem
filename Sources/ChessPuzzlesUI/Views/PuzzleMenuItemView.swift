@@ -95,6 +95,8 @@ class PuzzleMenuItemViewModel: ObservableObject {
            let firstMove = ChessEngine.Move(fromUCI: firstMoveUCI),
            let engine = engine {
             print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - applying first move \(firstMoveUCI) with animation")
+            // Update yellow squares BEFORE animation starts
+            opponentLastMove = (from: firstMove.from, to: firstMove.to)
             // Trigger animation before making the move
             animateMove = (from: firstMove.from, to: firstMove.to)
             // Make engine move happen slightly after animation completes to ensure smooth transition
@@ -104,8 +106,6 @@ class PuzzleMenuItemViewModel: ObservableObject {
                 print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - making engine move at \(moveDelay)s (after animation complete)")
                 _ = engine.makeMove(firstMove)
                 self.puzzleManager.advanceToNextMove()
-                // Track the opponent's last move for highlighting
-                self.opponentLastMove = (from: firstMove.from, to: firstMove.to)
                 // Clear animation trigger
                 self.animateMove = nil
             }
@@ -406,6 +406,8 @@ class PuzzleMenuItemViewModel: ObservableObject {
         }
 
         print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - animating engine move \(engineMoveUCI)")
+        // Update yellow squares BEFORE animation starts
+        opponentLastMove = (from: engineMove.from, to: engineMove.to)
         // Trigger animation before making the move
         animateMove = (from: engineMove.from, to: engineMove.to)
 
@@ -415,8 +417,6 @@ class PuzzleMenuItemViewModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + moveDelay) {
             print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - making engine move at \(moveDelay)s (after animation complete)")
             _ = engine.makeMove(engineMove)
-            // Track the opponent's last move for highlighting
-            self.opponentLastMove = (from: engineMove.from, to: engineMove.to)
             self.puzzleManager.advanceToNextMove()
             self.updateStatusLabel()
             self.updateNavigationState()
