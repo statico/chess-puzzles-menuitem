@@ -17,7 +17,7 @@ public enum BoardSize: String, CaseIterable {
     }
 
     static var `default`: BoardSize {
-        return .medium
+        return .large
     }
 
     public static func load() -> BoardSize {

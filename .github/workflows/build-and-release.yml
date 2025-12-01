@@ -1,0 +1,67 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v1
+        with:
+          swift-version: "5.9"
+
+      - name: Build Swift package
+        run: swift build -c release
+
+      - name: Build app bundle
+        run: ./build-app.sh release
+
+      - name: Create ZIP archive
+        run: |
+          VERSION=$(grep -E '^let version = ' Package.swift | sed -E "s/let version = \"(.*)\"/\1/")
+          zip -r "Chess-Puzzles-v${VERSION}.zip" "Chess Puzzles.app"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "ZIP_FILE=Chess-Puzzles-v${VERSION}.zip" >> $GITHUB_ENV
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-bundle
+          path: |
+            Chess Puzzles.app
+            ${{ env.ZIP_FILE }}
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ZIP_FILE }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Chess Puzzles ${{ github.ref_name }}
+
+            ### Changes
+            - See commit history for details
+
+            ### Installation
+            1. Download `Chess-Puzzles-v${{ env.VERSION }}.zip`
+            2. Extract the ZIP file
+            3. Move `Chess Puzzles.app` to your Applications folder
+            4. Open the app from Applications
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
