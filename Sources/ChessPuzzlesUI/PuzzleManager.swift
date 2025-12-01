@@ -28,6 +28,7 @@ public enum Difficulty: String, CaseIterable {
     }
 }
 
+@MainActor
 public class PuzzleManager {
     public static let shared = PuzzleManager()
 

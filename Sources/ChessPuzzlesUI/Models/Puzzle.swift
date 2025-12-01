@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Puzzle: Codable, Identifiable {
+public struct Puzzle: Codable, Identifiable, Sendable {
     public let id: String
     public let fen: String
     public let moves: [String] // UCI format moves

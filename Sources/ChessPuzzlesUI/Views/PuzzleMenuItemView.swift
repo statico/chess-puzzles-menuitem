@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 // Protocol for dependency injection
+@MainActor
 protocol PuzzleManagerProtocol {
     func getNextPuzzle() -> Puzzle?
     func getCurrentPuzzle() -> Puzzle?
@@ -22,8 +23,10 @@ protocol PuzzleManagerProtocol {
 }
 
 // Make PuzzleManager conform to the protocol
+@MainActor
 extension PuzzleManager: PuzzleManagerProtocol {}
 
+@MainActor
 class PuzzleMenuItemViewModel: ObservableObject {
     @Published var engine: ChessEngine?
     @Published var statusText: String = "White to move"
@@ -39,6 +42,8 @@ class PuzzleMenuItemViewModel: ObservableObject {
     @Published var canGoBackward: Bool = false
     @Published var canGoForward: Bool = false
     @Published var isPuzzleSolved: Bool = false
+
+    private var solutionMoveIndex: Int = 0
 
     enum NextButtonAction {
         case skip
@@ -151,14 +156,14 @@ class PuzzleMenuItemViewModel: ObservableObject {
     private func animateSolution() {
         guard let engine = engine else { return }
         let solution = puzzleManager.getSolution()
+        solutionMoveIndex = 0
 
-        var moveIndex = 0
         func makeNextMove() {
-            guard moveIndex < solution.count else { return }
-            let moveUCI = solution[moveIndex]
+            guard solutionMoveIndex < solution.count else { return }
+            let moveUCI = solution[solutionMoveIndex]
             if let move = ChessEngine.Move(fromUCI: moveUCI) {
                 _ = engine.makeMove(move)
-                moveIndex += 1
+                solutionMoveIndex += 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     makeNextMove()
                 }
@@ -182,7 +187,9 @@ class PuzzleMenuItemViewModel: ObservableObject {
 
         // Auto-clear message after 5 seconds
         messageTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
-            self?.clearMessage()
+            Task { @MainActor in
+                self?.clearMessage()
+            }
         }
     }
 
@@ -388,7 +395,9 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     deinit {
-        messageTimer?.invalidate()
+        MainActor.assumeIsolated {
+            messageTimer?.invalidate()
+        }
     }
 }
 

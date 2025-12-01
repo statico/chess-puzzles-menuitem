@@ -2,7 +2,7 @@ import Foundation
 import zstd
 import ChessPuzzlesUI
 
-public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDatabaseLoader {
+public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDatabaseLoader, @unchecked Sendable {
     public static let shared = DatabaseDownloader()
 
     private var downloadProgress: ((Int64, Int64) -> Void)?
@@ -37,7 +37,7 @@ public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDat
         return daysSinceRefresh >= 7
     }
 
-    public func downloadDatabase(progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
+    public func downloadDatabase(progress: @escaping @Sendable (Int64, Int64) -> Void, completion: @escaping @Sendable (Result<[Puzzle], Error>) -> Void) {
         // Check if cached file exists
         if FileManager.default.fileExists(atPath: cachedZstFileURL.path) {
             print("[DEBUG] Using cached zstd file: \(cachedZstFileURL.path)")
@@ -70,7 +70,7 @@ public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDat
         downloadFromNetwork(progress: progress, completion: completion)
     }
 
-    private func downloadFromNetwork(progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
+    private func downloadFromNetwork(progress: @escaping @Sendable (Int64, Int64) -> Void, completion: @escaping @Sendable (Result<[Puzzle], Error>) -> Void) {
         print("[DEBUG] Starting database download from: \(databaseURL)")
 
         self.downloadProgress = progress
@@ -181,7 +181,7 @@ public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDat
         }
     }
 
-    private func parseCSV(data: Data, progress: @escaping (Double) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
+    private func parseCSV(data: Data, progress: @escaping @Sendable (Double) -> Void, completion: @escaping @Sendable (Result<[Puzzle], Error>) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             print("[DEBUG] Starting CSV parsing, data size: \(data.count) bytes")
             var puzzles: [Puzzle] = []
@@ -314,7 +314,7 @@ public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDat
         }
     }
 
-    private func parseCSVString(_ csvString: String, progress: @escaping (Double) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void, puzzles: inout [Puzzle]) {
+    private func parseCSVString(_ csvString: String, progress: @escaping @Sendable (Double) -> Void, completion: @escaping @Sendable (Result<[Puzzle], Error>) -> Void, puzzles: inout [Puzzle]) {
         let lines = csvString.components(separatedBy: .newlines)
         let totalLines = lines.count
         print("[DEBUG] Total lines in CSV: \(totalLines)")
@@ -416,7 +416,7 @@ public class DatabaseDownloader: NSObject, URLSessionDownloadDelegate, PuzzleDat
         try? data.write(to: localDatabaseURL)
     }
 
-    public func refreshDatabase(progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<[Puzzle], Error>) -> Void) {
+    public func refreshDatabase(progress: @escaping @Sendable (Int64, Int64) -> Void, completion: @escaping @Sendable (Result<[Puzzle], Error>) -> Void) {
         downloadDatabase(progress: progress, completion: completion)
     }
 }

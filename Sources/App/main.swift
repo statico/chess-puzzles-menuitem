@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import ChessPuzzlesUI
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusBarItem: NSStatusItem?
     var puzzleMenuItemView: PuzzleMenuItemView?

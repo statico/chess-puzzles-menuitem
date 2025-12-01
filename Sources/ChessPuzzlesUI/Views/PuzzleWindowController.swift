@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 
+@MainActor
 class PuzzleWindowViewModel: ObservableObject {
     @Published var engine: ChessEngine?
     @Published var statusText: String = "White to move"
@@ -15,6 +16,7 @@ class PuzzleWindowViewModel: ObservableObject {
     @Published var isPuzzleSolved: Bool = false
 
     private var puzzleManager = PuzzleManager.shared
+    private var solutionMoveIndex: Int = 0
 
     init() {
         selectedDifficulty = puzzleManager.getDifficulty()
@@ -95,14 +97,14 @@ class PuzzleWindowViewModel: ObservableObject {
     private func animateSolution() {
         guard let engine = engine else { return }
         let solution = puzzleManager.getSolution()
+        solutionMoveIndex = 0
 
-        var moveIndex = 0
         func makeNextMove() {
-            guard moveIndex < solution.count else { return }
-            let moveUCI = solution[moveIndex]
+            guard solutionMoveIndex < solution.count else { return }
+            let moveUCI = solution[solutionMoveIndex]
             if let move = ChessEngine.Move(fromUCI: moveUCI) {
                 _ = engine.makeMove(move)
-                moveIndex += 1
+                solutionMoveIndex += 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     makeNextMove()
                 }
@@ -207,6 +209,7 @@ class PuzzleWindowViewModel: ObservableObject {
         showAlert(title: "Puzzle Solved!", message: "Great job!")
     }
 
+    @MainActor
     private func showAlert(title: String, message: String) {
         let alert = NSAlert()
         alert.messageText = title
