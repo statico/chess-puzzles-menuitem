@@ -97,9 +97,11 @@ class PuzzleMenuItemViewModel: ObservableObject {
             print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - applying first move \(firstMoveUCI) with animation")
             // Trigger animation before making the move
             animateMove = (from: firstMove.from, to: firstMove.to)
-            // Delay engine move until animation completes (0.4s animation + 0.1s buffer)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - animation should be complete, making engine move")
+            // Make engine move happen slightly after animation completes to ensure smooth transition
+            let animationDuration: TimeInterval = 0.4
+            let moveDelay = animationDuration + 0.05 // Small buffer after animation completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + moveDelay) {
+                print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - making engine move at \(moveDelay)s (after animation complete)")
                 _ = engine.makeMove(firstMove)
                 self.puzzleManager.advanceToNextMove()
                 // Track the opponent's last move for highlighting
@@ -407,9 +409,11 @@ class PuzzleMenuItemViewModel: ObservableObject {
         // Trigger animation before making the move
         animateMove = (from: engineMove.from, to: engineMove.to)
 
-        // Delay engine move until animation completes (0.4s animation + 0.1s buffer)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - animation should be complete, making engine move")
+        // Make engine move happen slightly after animation completes to ensure smooth transition
+        let animationDuration: TimeInterval = 0.4
+        let moveDelay = animationDuration + 0.05 // Small buffer after animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + moveDelay) {
+            print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - making engine move at \(moveDelay)s (after animation complete)")
             _ = engine.makeMove(engineMove)
             // Track the opponent's last move for highlighting
             self.opponentLastMove = (from: engineMove.from, to: engineMove.to)

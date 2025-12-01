@@ -33,7 +33,13 @@ struct ChessBoardView: View {
     @State private var animatedPiece: (piece: ChessEngine.Piece, from: ChessEngine.Square, to: ChessEngine.Square, progress: CGFloat)? = nil
     @State private var lastAnimateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
     @State private var animationTrigger: UUID = UUID()
+    @State private var currentAnimateMoveString: String = ""
     var showCoordinates: Bool = true
+
+    // Computed property to convert animateMove to string for change detection
+    private var animateMoveString: String {
+        animateMove != nil ? "\(animateMove!.from.uci)-\(animateMove!.to.uci)" : ""
+    }
 
     private let selectedSquareColor = Color(red: 0.5, green: 0.8, blue: 1.0, opacity: 0.6)
     private let highlightColor = Color(red: 0.2, green: 0.8, blue: 0.2, opacity: 0.4)
@@ -124,27 +130,75 @@ struct ChessBoardView: View {
                 if let engine = engine {
                     print("[DEBUG] ChessBoardView.body.onAppear - activeColor: \(engine.getActiveColor())")
                 }
+                // Check for pending animation on appear
+                let newString = animateMoveString
+                if newString != currentAnimateMoveString && !newString.isEmpty {
+                    print("[DEBUG] ChessBoardView.body.onAppear - detected pending animation: '\(newString)'")
+                    currentAnimateMoveString = newString
+                    animationTrigger = UUID()
+                }
+            }
+            .task(id: animateMoveString) {
+                print("[DEBUG] ChessBoardView.body.task - animateMoveString changed to: '\(animateMoveString)', currentAnimateMoveString: '\(currentAnimateMoveString)'")
+                if animateMoveString != currentAnimateMoveString && !animateMoveString.isEmpty {
+                    currentAnimateMoveString = animateMoveString
+                    if animateMove != nil {
+                        print("[DEBUG] ChessBoardView.body.task - triggering animation for move: \(animateMoveString)")
+                        // Small delay to ensure view is ready
+                        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                        animationTrigger = UUID()
+                    }
+                }
             }
             .onChange(of: animateMove?.from.file) { _ in
-                animationTrigger = UUID()
+                let newString = animateMoveString
+                if newString != currentAnimateMoveString {
+                    print("[DEBUG] ChessBoardView.onChange - animateMove.from.file changed, new string: '\(newString)'")
+                    currentAnimateMoveString = newString
+                    if !newString.isEmpty {
+                        animationTrigger = UUID()
+                    }
+                }
             }
             .onChange(of: animateMove?.from.rank) { _ in
-                animationTrigger = UUID()
+                let newString = animateMoveString
+                if newString != currentAnimateMoveString {
+                    print("[DEBUG] ChessBoardView.onChange - animateMove.from.rank changed, new string: '\(newString)'")
+                    currentAnimateMoveString = newString
+                    if !newString.isEmpty {
+                        animationTrigger = UUID()
+                    }
+                }
             }
             .onChange(of: animateMove?.to.file) { _ in
-                animationTrigger = UUID()
+                let newString = animateMoveString
+                if newString != currentAnimateMoveString {
+                    print("[DEBUG] ChessBoardView.onChange - animateMove.to.file changed, new string: '\(newString)'")
+                    currentAnimateMoveString = newString
+                    if !newString.isEmpty {
+                        animationTrigger = UUID()
+                    }
+                }
             }
             .onChange(of: animateMove?.to.rank) { _ in
-                animationTrigger = UUID()
+                let newString = animateMoveString
+                if newString != currentAnimateMoveString {
+                    print("[DEBUG] ChessBoardView.onChange - animateMove.to.rank changed, new string: '\(newString)'")
+                    currentAnimateMoveString = newString
+                    if !newString.isEmpty {
+                        animationTrigger = UUID()
+                    }
+                }
             }
             .onChange(of: animationTrigger) { _ in
                 if let move = animateMove {
+                    print("[DEBUG] ChessBoardView.body.onChange - animationTrigger changed, calling checkAndStartAnimation with squareSize: \(squareSize)")
                     checkAndStartAnimation(move: move, squareSize: squareSize)
                 }
             }
         }
         .background(Color(white: 0.3))
-        .id(engine?.toFEN() ?? UUID().uuidString)
+        .id("\(engine?.toFEN() ?? UUID().uuidString)-\(animateMoveString)")
     }
 
     private func drawBoard(context: GraphicsContext, size: CGSize, squareSize: CGFloat) {
@@ -487,14 +541,16 @@ struct ChessBoardView: View {
     }
 
     private func pieceView(piece: ChessEngine.Piece, size: CGFloat) -> some View {
-        Group {
+        // Apply same padding as canvas drawing (10% padding = 0.8x size)
+        let pieceSize = size * 0.8
+        return Group {
             if let image = pieceImages[piece] {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: size, height: size)
+                    .frame(width: pieceSize, height: pieceSize)
             } else {
-                pieceSymbolView(piece: piece, size: size)
+                pieceSymbolView(piece: piece, size: pieceSize)
             }
         }
     }
@@ -641,6 +697,7 @@ struct ChessBoardView: View {
         boardColor.save()
     }
 
+
     private func checkAndStartAnimation(move: (from: ChessEngine.Square, to: ChessEngine.Square), squareSize: CGFloat) {
         print("[DEBUG] ChessBoardView.checkAndStartAnimation - called for move from \(move.from.uci) to \(move.to.uci)")
         // Check if this is a new move (different from last one)
@@ -669,19 +726,23 @@ struct ChessBoardView: View {
 
         print("[DEBUG] ChessBoardView.startAnimation - starting animation for piece \(piece) from \(move.from.uci) to \(move.to.uci)")
 
-        // Start animation
+        // Start animation - set initial state
         animatedPiece = (piece: piece, from: move.from, to: move.to, progress: 0.0)
-        print("[DEBUG] ChessBoardView.startAnimation - animatedPiece set, starting SwiftUI animation")
+        print("[DEBUG] ChessBoardView.startAnimation - animatedPiece set to progress 0.0, starting SwiftUI animation")
 
-        // Animate the piece
-        withAnimation(.easeInOut(duration: 0.4)) {
-            animatedPiece?.progress = 1.0
+        // Animate the piece by updating the entire tuple
+        let animationDuration: TimeInterval = 0.4
+        withAnimation(.easeInOut(duration: animationDuration)) {
+            animatedPiece = (piece: piece, from: move.from, to: move.to, progress: 1.0)
+            print("[DEBUG] ChessBoardView.startAnimation - animatedPiece updated to progress 1.0 inside withAnimation")
         }
 
         // Clear animation after it completes
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            print("[DEBUG] ChessBoardView.startAnimation - animation completed, clearing animatedPiece")
+        DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
+            print("[DEBUG] ChessBoardView.startAnimation - animation completed, clearing animatedPiece and lastAnimateMove")
             self.animatedPiece = nil
+            // Clear lastAnimateMove so the same move can be animated again if needed
+            self.lastAnimateMove = nil
         }
     }
 }
