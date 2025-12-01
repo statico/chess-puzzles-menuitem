@@ -15,6 +15,12 @@ Vibe coded with [Cursor](https://cursor.com).
 - Customizable board colors
 - Offline puzzle database with automatic updates
 
+## Download
+
+Download the application from the [Releases](https://github.com/statico/chess-puzzles-menuitem/releases) page.
+
+The application is not code signed because I'm too cheap to pay for an Apple developer account right now.
+
 ## Development
 
 Build the project:
