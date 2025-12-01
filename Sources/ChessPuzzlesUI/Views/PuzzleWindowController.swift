@@ -4,8 +4,6 @@ import AppKit
 class PuzzleWindowViewModel: ObservableObject {
     @Published var engine: ChessEngine?
     @Published var statusText: String = "White to move"
-    @Published var timerText: String = "00:00"
-    @Published var streakText: String = "Streak: 0"
     @Published var showNextButton: Bool = false
     @Published var hintButtonEnabled: Bool = true
     @Published var solutionButtonEnabled: Bool = true
@@ -16,13 +14,9 @@ class PuzzleWindowViewModel: ObservableObject {
     @Published var canGoForward: Bool = false
 
     private var puzzleManager = PuzzleManager.shared
-    private var statsManager = StatsManager.shared
-    private var startTime: Date?
-    private var timer: Timer?
 
     init() {
         selectedDifficulty = puzzleManager.getDifficulty()
-        updateStats()
     }
 
     func loadNewPuzzle() {
@@ -55,7 +49,6 @@ class PuzzleWindowViewModel: ObservableObject {
         // Player color will be passed to the board view
 
         updateStatusLabel()
-        startTimer()
         showNextButton = false
         hintButtonEnabled = true
         solutionButtonEnabled = true
@@ -75,51 +68,6 @@ class PuzzleWindowViewModel: ObservableObject {
         }
     }
 
-    func startTimer() {
-        stopTimer()
-        startTime = Date()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateTimer()
-        }
-        updateTimer()
-    }
-
-    func stopTimer() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    private func updateTimer() {
-        guard let startTime = startTime else {
-            timerText = "00:00"
-            return
-        }
-        let elapsed = Date().timeIntervalSince(startTime)
-        let minutes = Int(elapsed) / 60
-        let seconds = Int(elapsed) % 60
-        timerText = String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    func updateStats() {
-        let stats = statsManager.getStats()
-        let streak = stats.currentStreak
-        let emoji: String
-        switch streak {
-        case 0:
-            emoji = "⚫️"
-        case 1...2:
-            emoji = "🟢"
-        case 3...4:
-            emoji = "🟡"
-        case 5...7:
-            emoji = "🟠"
-        case 8...10:
-            emoji = "🔴"
-        default:
-            emoji = "🔥"
-        }
-        streakText = "\(emoji) Streak: \(streak)"
-    }
 
     func hintClicked() {
         guard let hint = puzzleManager.getHint() else { return }
@@ -134,7 +82,6 @@ class PuzzleWindowViewModel: ObservableObject {
     }
 
     private func showSolution() {
-        stopTimer()
         showNextButton = true
         hintButtonEnabled = false
         solutionButtonEnabled = false
@@ -250,22 +197,11 @@ class PuzzleWindowViewModel: ObservableObject {
     }
 
     private func puzzleSolved() {
-        stopTimer()
-        let solveTime = Date().timeIntervalSince(startTime ?? Date())
-        statsManager.recordSolve(time: solveTime, wasCorrect: true)
-        updateStats()
-
         showNextButton = true
         hintButtonEnabled = false
         solutionButtonEnabled = false
 
-        showAlert(title: "Puzzle Solved!", message: "Great job! Time: \(formatTime(solveTime))")
-    }
-
-    private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        showAlert(title: "Puzzle Solved!", message: "Great job!")
     }
 
     private func showAlert(title: String, message: String) {
@@ -354,9 +290,6 @@ class PuzzleWindowViewModel: ObservableObject {
         opponentLastMove = puzzleManager.getOpponentLastMove()
     }
 
-    deinit {
-        stopTimer()
-    }
 }
 
 struct PuzzleWindowView: View {
@@ -370,19 +303,6 @@ struct PuzzleWindowView: View {
             HStack {
                 Text(viewModel.statusText)
                     .font(.system(size: 16, weight: .medium))
-
-                Spacer()
-
-                Text(viewModel.timerText)
-                    .font(.system(size: 16, weight: .medium))
-                    .monospacedDigit()
-            }
-            .padding(.horizontal, 60)
-
-            // Stats and difficulty row
-            HStack {
-                Text(viewModel.streakText)
-                    .font(.system(size: 14))
 
                 Spacer()
 

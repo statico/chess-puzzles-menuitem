@@ -89,8 +89,9 @@ public class PuzzleManager {
     }
 
     private func loadUserRating() {
-        let stats = StatsManager.shared.getStats()
-        self.userRating = stats.userRating
+        if let savedRating = UserDefaults.standard.object(forKey: "userPuzzleRating") as? Int {
+            self.userRating = savedRating
+        }
     }
 
     func getNextPuzzle() -> Puzzle? {

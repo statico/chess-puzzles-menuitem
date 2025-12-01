@@ -469,29 +469,24 @@ struct ChessBoardView: View {
             guard let square = squareAt(point: location, squareSize: squareSize),
                   let engine = engine,
                   let piece = engine.getPiece(at: square) else {
-                print("[DEBUG] ChessBoardView.handleDragChanged - invalid square or no piece")
                 return
             }
 
             let pieceColor: ChessEngine.Color = piece.isWhite ? .white : .black
-            print("[DEBUG] ChessBoardView.handleDragChanged - square: \(square.uci), piece: \(piece), pieceColor: \(pieceColor), playerColor: \(String(describing: playerColor))")
 
             // If playerColor is set, only allow selecting player's pieces
             if let playerColor = playerColor {
                 guard pieceColor == playerColor else {
-                    print("[DEBUG] ChessBoardView.handleDragChanged - piece color (\(pieceColor)) doesn't match player color (\(playerColor))")
                     return
                 }
             } else {
                 // Fallback to original behavior: only allow active color
                 let activeColor = engine.getActiveColor()
                 guard pieceColor == activeColor else {
-                    print("[DEBUG] ChessBoardView.handleDragChanged - piece color (\(pieceColor)) doesn't match active color (\(activeColor))")
                     return
                 }
             }
 
-            print("[DEBUG] ChessBoardView.handleDragChanged - starting drag from square: \(square.uci)")
             selectedSquare = square
             draggedPiece = (piece, square)
             isDragging = true
@@ -508,7 +503,6 @@ struct ChessBoardView: View {
                     }
                 }
                 highlightedSquares = legalSquares
-                print("[DEBUG] ChessBoardView.handleDragChanged - highlighted \(legalSquares.count) legal squares")
             }
         }
 

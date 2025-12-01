@@ -21,20 +21,12 @@ protocol PuzzleManagerProtocol {
     func goForward() -> (moveUCI: String, isPlayerMove: Bool)?
 }
 
-protocol StatsManagerProtocol {
-    func getStats() -> PuzzleStats
-    func recordSolve(time: TimeInterval, wasCorrect: Bool)
-}
-
 // Make PuzzleManager conform to the protocol
 extension PuzzleManager: PuzzleManagerProtocol {}
-extension StatsManager: StatsManagerProtocol {}
 
 class PuzzleMenuItemViewModel: ObservableObject {
     @Published var engine: ChessEngine?
     @Published var statusText: String = "White to move"
-    @Published var timerText: String = "00:00"
-    @Published var streakText: String = "Streak: 0"
     @Published var messageText: String = ""
     @Published var messageColor: Color = .secondary
     @Published var nextButtonTitle: String = "Skip"
@@ -54,26 +46,11 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     private let puzzleManager: PuzzleManagerProtocol
-    private let statsManager: StatsManagerProtocol
-    private var startTime: Date?
-    private var pausedTime: TimeInterval = 0
-    private var timer: Timer?
     private var messageTimer: Timer?
     private var hasLoadedPuzzle: Bool = false
-    var isMenuOpen: Bool = false {
-        didSet {
-            if isMenuOpen {
-                startTimer()
-            } else {
-                pauseTimer()
-            }
-        }
-    }
 
-    init(puzzleManager: PuzzleManagerProtocol = PuzzleManager.shared, statsManager: StatsManagerProtocol = StatsManager.shared) {
+    init(puzzleManager: PuzzleManagerProtocol = PuzzleManager.shared) {
         self.puzzleManager = puzzleManager
-        self.statsManager = statsManager
-        updateStats()
     }
 
     func loadNewPuzzle() {
@@ -114,14 +91,6 @@ class PuzzleMenuItemViewModel: ObservableObject {
         }
 
         updateStatusLabel()
-        pausedTime = 0
-        startTime = nil
-        print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - reset timer, isMenuOpen: \(isMenuOpen)")
-        if isMenuOpen {
-            startTimer()
-        } else {
-            print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - menu not open, timer will start when menu opens")
-        }
         nextButtonTitle = "Skip"
         nextButtonAction = .skip
         showNextButton = true
@@ -149,113 +118,11 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     func menuWillOpen() {
-        print("[DEBUG] PuzzleMenuItemViewModel.menuWillOpen - called, current isMenuOpen: \(isMenuOpen), engine: \(engine != nil ? "exists" : "nil")")
-        isMenuOpen = true
-        if engine != nil {
-            startTimer()
-        } else {
-            print("[DEBUG] PuzzleMenuItemViewModel.menuWillOpen - engine is nil, not starting timer")
-        }
+        print("[DEBUG] PuzzleMenuItemViewModel.menuWillOpen - called, engine: \(engine != nil ? "exists" : "nil")")
     }
 
     func menuDidClose() {
-        print("[DEBUG] PuzzleMenuItemViewModel.menuDidClose - called, current isMenuOpen: \(isMenuOpen)")
-        isMenuOpen = false
-        pauseTimer()
-    }
-
-    private func startTimer() {
-        print("[DEBUG] PuzzleMenuItemViewModel.startTimer - called, isMenuOpen: \(isMenuOpen), startTime: \(String(describing: startTime)), pausedTime: \(pausedTime)")
-        guard isMenuOpen else {
-            print("[DEBUG] PuzzleMenuItemViewModel.startTimer - menu not open, aborting")
-            return
-        }
-        stopTimer()
-
-        // If we have paused time, adjust startTime to account for it
-        if pausedTime > 0 {
-            startTime = Date().addingTimeInterval(-pausedTime)
-            print("[DEBUG] PuzzleMenuItemViewModel.startTimer - resuming with pausedTime: \(pausedTime), adjusted startTime: \(String(describing: startTime))")
-        } else {
-            startTime = Date()
-            print("[DEBUG] PuzzleMenuItemViewModel.startTimer - starting fresh, startTime: \(String(describing: startTime))")
-        }
-
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
-            guard let self = self, self.isMenuOpen else {
-                print("[DEBUG] PuzzleMenuItemViewModel.startTimer - timer callback: menu closed or self deallocated, invalidating")
-                timer.invalidate()
-                return
-            }
-            self.updateTimer()
-        }
-        RunLoop.main.add(timer!, forMode: .common)
-        print("[DEBUG] PuzzleMenuItemViewModel.startTimer - timer created and added to run loop")
-        updateTimer()
-    }
-
-    private func pauseTimer() {
-        print("[DEBUG] PuzzleMenuItemViewModel.pauseTimer - called, startTime: \(String(describing: startTime))")
-        guard let startTime = startTime else {
-            print("[DEBUG] PuzzleMenuItemViewModel.pauseTimer - no startTime, nothing to pause")
-            return
-        }
-        // Calculate total elapsed time including paused time
-        let elapsed = Date().timeIntervalSince(startTime)
-        pausedTime = elapsed
-        print("[DEBUG] PuzzleMenuItemViewModel.pauseTimer - elapsed time: \(elapsed), pausedTime set to: \(pausedTime)")
-        stopTimer()
-    }
-
-    private func stopTimer() {
-        if timer != nil {
-            print("[DEBUG] PuzzleMenuItemViewModel.stopTimer - invalidating timer")
-            timer?.invalidate()
-            timer = nil
-        } else {
-            print("[DEBUG] PuzzleMenuItemViewModel.stopTimer - timer already nil")
-        }
-    }
-
-    private func updateTimer() {
-        guard let startTime = startTime, isMenuOpen else {
-            if startTime == nil {
-                print("[DEBUG] PuzzleMenuItemViewModel.updateTimer - no startTime, setting to 00:00")
-            } else if !isMenuOpen {
-                print("[DEBUG] PuzzleMenuItemViewModel.updateTimer - menu not open, setting to 00:00")
-            }
-            timerText = "00:00"
-            return
-        }
-        let elapsed = Date().timeIntervalSince(startTime)
-        let minutes = Int(elapsed) / 60
-        let seconds = Int(elapsed) % 60
-        let newText = String(format: "%02d:%02d", minutes, seconds)
-        if newText != timerText {
-            timerText = newText
-            print("[DEBUG] PuzzleMenuItemViewModel.updateTimer - updated to: \(timerText), elapsed: \(elapsed)s")
-        }
-    }
-
-    func updateStats() {
-        let stats = statsManager.getStats()
-        let streak = stats.currentStreak
-        let emoji: String
-        switch streak {
-        case 0:
-            emoji = "⚫️"
-        case 1...2:
-            emoji = "🟢"
-        case 3...4:
-            emoji = "🟡"
-        case 5...7:
-            emoji = "🟠"
-        case 8...10:
-            emoji = "🔴"
-        default:
-            emoji = "🔥"
-        }
-        streakText = "\(emoji) Streak: \(streak)"
+        print("[DEBUG] PuzzleMenuItemViewModel.menuDidClose - called")
     }
 
     func hintClicked() {
@@ -271,7 +138,6 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     private func showSolution() {
-        stopTimer()
         nextButtonTitle = "Next"
         nextButtonAction = .next
         showNextButton = true
@@ -369,10 +235,8 @@ class PuzzleMenuItemViewModel: ObservableObject {
                 makeEngineMove()
             }
         } else {
-            // Wrong move - break the streak
-            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - move invalid, breaking streak")
-            statsManager.recordSolve(time: 0, wasCorrect: false)
-            updateStats()
+            // Wrong move
+            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - move invalid")
             showMessage("Incorrect move. Try again!", color: .red)
         }
     }
@@ -432,12 +296,6 @@ class PuzzleMenuItemViewModel: ObservableObject {
 
     private func puzzleSolved() {
         print("[DEBUG] PuzzleMenuItemViewModel.puzzleSolved - called")
-        stopTimer()
-        let solveTime = Date().timeIntervalSince(startTime ?? Date())
-        print("[DEBUG] PuzzleMenuItemViewModel.puzzleSolved - solveTime: \(solveTime)s")
-        statsManager.recordSolve(time: solveTime, wasCorrect: true)
-        updateStats()
-
         nextButtonTitle = "Next"
         nextButtonAction = .next
         showNextButton = true
@@ -448,13 +306,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
         // Notify that puzzle is solved so menu item can be enabled
         NotificationCenter.default.post(name: NSNotification.Name("PuzzleSolved"), object: nil)
 
-        showMessage("Puzzle Solved! Time: \(formatTime(solveTime))", color: .green)
-    }
-
-    private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        showMessage("Puzzle Solved!", color: .green)
     }
 
     func navigateBackward() {
@@ -530,7 +382,6 @@ class PuzzleMenuItemViewModel: ObservableObject {
     }
 
     deinit {
-        stopTimer()
         messageTimer?.invalidate()
     }
 }
@@ -609,12 +460,7 @@ struct PuzzleMenuItemContentView: View {
             HStack {
                 Text(viewModel.statusText)
                     .font(.system(size: 14, weight: .medium))
-
                 Spacer()
-
-                Text(viewModel.timerText)
-                    .font(.system(size: 14, weight: .medium))
-                    .monospacedDigit()
             }
             .frame(height: controlHeight)
 
@@ -634,14 +480,6 @@ struct PuzzleMenuItemContentView: View {
             )
             .frame(width: boardSizeValue, height: boardSizeValue)
             .id("\(boardSettings.boardSize.rawValue)-\(boardSizeValue)")
-
-            // Streak label
-            HStack {
-                Text(viewModel.streakText)
-                    .font(.system(size: 12))
-                Spacer()
-            }
-            .frame(height: controlHeight)
 
             // Buttons row
             HStack(spacing: 10) {
@@ -803,8 +641,8 @@ public class PuzzleMenuItemView: NSView {
         let spacing: CGFloat = 10
         let messageHeight = controlHeight * 1.5
 
-        // Calculate total height: padding + status + board + spacing + streak + spacing + buttons + spacing + message + padding
-        let totalHeight = padding + controlHeight + boardSizeValue + spacing + controlHeight + spacing + controlHeight + spacing + messageHeight + padding
+        // Calculate total height: padding + status + board + spacing + buttons + spacing + message + padding
+        let totalHeight = padding + controlHeight + boardSizeValue + spacing + controlHeight + spacing + messageHeight + padding
         let totalWidth = boardSizeValue + (padding * 2)
 
         print("[DEBUG] PuzzleMenuItemView.updateFrame - calculated size: \(totalWidth)x\(totalHeight), current frame: \(self.frame)")
@@ -824,7 +662,7 @@ public class PuzzleMenuItemView: NSView {
         let spacing: CGFloat = 10
         let messageHeight = controlHeight * 1.5
 
-        let totalHeight = padding + controlHeight + boardSizeValue + spacing + controlHeight + spacing + controlHeight + spacing + messageHeight + padding
+        let totalHeight = padding + controlHeight + boardSizeValue + spacing + controlHeight + spacing + messageHeight + padding
         let totalWidth = boardSizeValue + (padding * 2)
 
         let size = NSSize(width: totalWidth, height: totalHeight)
@@ -1016,17 +854,6 @@ private class MockPuzzleManager: PuzzleManagerProtocol {
     }
 }
 
-private class MockStatsManager: StatsManagerProtocol {
-    func getStats() -> PuzzleStats {
-        var stats = PuzzleStats()
-        stats.currentStreak = 5
-        stats.totalSolved = 100
-        stats.userRating = 1500
-        return stats
-    }
-
-    func recordSolve(time: TimeInterval, wasCorrect: Bool) {}
-}
 
 // Preview wrapper that provides safe defaults
 private struct PreviewWrapper: View {
@@ -1036,10 +863,8 @@ private struct PreviewWrapper: View {
 
     init() {
         let mockPuzzleManager = MockPuzzleManager()
-        let mockStatsManager = MockStatsManager()
         _viewModel = StateObject(wrappedValue: PuzzleMenuItemViewModel(
-            puzzleManager: mockPuzzleManager,
-            statsManager: mockStatsManager
+            puzzleManager: mockPuzzleManager
         ))
     }
 
@@ -1058,12 +883,7 @@ private struct PreviewWrapper: View {
             HStack {
                 Text("⬜️ White to Move")
                     .font(.system(size: 14, weight: .medium))
-
                 Spacer()
-
-                Text("00:00")
-                    .font(.system(size: 14, weight: .medium))
-                    .monospacedDigit()
             }
             .frame(height: controlHeight)
 
@@ -1076,14 +896,6 @@ private struct PreviewWrapper: View {
                 shouldHighlight: { _, _ in false }
             )
             .frame(width: boardSizeValue, height: boardSizeValue)
-
-            // Streak label
-            HStack {
-                Text("🟢 Streak: 5")
-                    .font(.system(size: 12))
-                Spacer()
-            }
-            .frame(height: controlHeight)
 
             // Buttons row
             HStack(spacing: 10) {

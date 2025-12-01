@@ -6,7 +6,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusBarItem: NSStatusItem?
     var puzzleMenuItemView: PuzzleMenuItemView?
     var puzzleMenuItem: NSMenuItem?
-    var statsWindowController: StatsWindowController?
     var analyzeMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -204,11 +203,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsItem.submenu = settingsSubmenu
         menu.addItem(settingsItem)
 
-        // Statistics
-        let statsItem = NSMenuItem(title: "Statistics", action: #selector(showStatistics), keyEquivalent: "s")
-        statsItem.target = self
-        menu.addItem(statsItem)
-
         // Analyze on Chess.com
         let analyzeItem = NSMenuItem(title: "Analyze on Chess.com...", action: #selector(analyzeOnChessCom), keyEquivalent: "")
         analyzeItem.target = self
@@ -323,16 +317,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         print("[DEBUG] AppDelegate.boardSizeSelected - completed")
-    }
-
-    @objc func showStatistics() {
-        if statsWindowController == nil {
-            let windowController = StatsWindowController()
-            statsWindowController = windowController
-        }
-        statsWindowController?.showWindow(nil)
-        statsWindowController?.updateStats()
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc func refreshDatabase() {
