@@ -198,7 +198,6 @@ struct ChessBoardView: View {
             }
         }
         .background(Color(white: 0.3))
-        .id("\(engine?.toFEN() ?? UUID().uuidString)-\(animateMoveString)")
     }
 
     private func drawBoard(context: GraphicsContext, size: CGSize, squareSize: CGFloat) {
@@ -737,9 +736,11 @@ struct ChessBoardView: View {
             print("[DEBUG] ChessBoardView.startAnimation - animatedPiece updated to progress 1.0 inside withAnimation")
         }
 
-        // Clear animation after it completes
+        // Clear animation after it fully completes (at 100%) to ensure smooth transition
+        // The engine move happens at 98%, so the piece will be at destination in engine state
+        // but we keep the animated piece visible until animation completes to avoid visual jump
         DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
-            print("[DEBUG] ChessBoardView.startAnimation - animation completed, clearing animatedPiece and lastAnimateMove")
+            print("[DEBUG] ChessBoardView.startAnimation - animation completed, clearing animatedPiece")
             self.animatedPiece = nil
             // Clear lastAnimateMove so the same move can be animated again if needed
             self.lastAnimateMove = nil

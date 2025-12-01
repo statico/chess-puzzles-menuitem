@@ -99,14 +99,14 @@ class PuzzleMenuItemViewModel: ObservableObject {
             opponentLastMove = (from: firstMove.from, to: firstMove.to)
             // Trigger animation before making the move
             animateMove = (from: firstMove.from, to: firstMove.to)
-            // Make engine move happen slightly after animation completes to ensure smooth transition
+            // Make engine move happen at 98% of animation, same time as animated piece is cleared
             let animationDuration: TimeInterval = 0.25
-            let moveDelay = animationDuration + 0.05 // Small buffer after animation completes
+            let moveDelay = animationDuration * 0.98
             DispatchQueue.main.asyncAfter(deadline: .now() + moveDelay) {
-                print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - making engine move at \(moveDelay)s (after animation complete)")
+                print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - making engine move at \(moveDelay)s (98% of animation)")
                 _ = engine.makeMove(firstMove)
                 self.puzzleManager.advanceToNextMove()
-                // Clear animation trigger
+                // Clear animation trigger immediately after engine move
                 self.animateMove = nil
             }
         } else {
@@ -411,16 +411,16 @@ class PuzzleMenuItemViewModel: ObservableObject {
         // Trigger animation before making the move
         animateMove = (from: engineMove.from, to: engineMove.to)
 
-        // Make engine move happen slightly after animation completes to ensure smooth transition
+        // Make engine move happen at 98% of animation, same time as animated piece is cleared
         let animationDuration: TimeInterval = 0.25
-        let moveDelay = animationDuration + 0.05 // Small buffer after animation completes
+        let moveDelay = animationDuration * 0.98
         DispatchQueue.main.asyncAfter(deadline: .now() + moveDelay) {
-            print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - making engine move at \(moveDelay)s (after animation complete)")
+            print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - making engine move at \(moveDelay)s (98% of animation)")
             _ = engine.makeMove(engineMove)
             self.puzzleManager.advanceToNextMove()
             self.updateStatusLabel()
             self.updateNavigationState()
-            // Clear animation trigger
+            // Clear animation trigger immediately after engine move
             self.animateMove = nil
 
             // Check if puzzle is complete after engine's move
