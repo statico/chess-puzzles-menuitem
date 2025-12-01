@@ -730,9 +730,9 @@ struct ChessBoardView: View {
         animatedPiece = (piece: piece, from: move.from, to: move.to, progress: 0.0)
         print("[DEBUG] ChessBoardView.startAnimation - animatedPiece set to progress 0.0, starting SwiftUI animation")
 
-        // Animate the piece by updating the entire tuple
-        let animationDuration: TimeInterval = 0.4
-        withAnimation(.easeInOut(duration: animationDuration)) {
+        // Animate the piece by updating the entire tuple with cubic ease in-out
+        let animationDuration: TimeInterval = 0.25
+        withAnimation(.timingCurve(0.65, 0, 0.35, 1, duration: animationDuration)) {
             animatedPiece = (piece: piece, from: move.from, to: move.to, progress: 1.0)
             print("[DEBUG] ChessBoardView.startAnimation - animatedPiece updated to progress 1.0 inside withAnimation")
         }

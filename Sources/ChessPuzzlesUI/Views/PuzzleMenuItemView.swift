@@ -98,7 +98,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
             // Trigger animation before making the move
             animateMove = (from: firstMove.from, to: firstMove.to)
             // Make engine move happen slightly after animation completes to ensure smooth transition
-            let animationDuration: TimeInterval = 0.4
+            let animationDuration: TimeInterval = 0.25
             let moveDelay = animationDuration + 0.05 // Small buffer after animation completes
             DispatchQueue.main.asyncAfter(deadline: .now() + moveDelay) {
                 print("[DEBUG] PuzzleMenuItemViewModel.loadNewPuzzle - making engine move at \(moveDelay)s (after animation complete)")
@@ -410,7 +410,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
         animateMove = (from: engineMove.from, to: engineMove.to)
 
         // Make engine move happen slightly after animation completes to ensure smooth transition
-        let animationDuration: TimeInterval = 0.4
+        let animationDuration: TimeInterval = 0.25
         let moveDelay = animationDuration + 0.05 // Small buffer after animation completes
         DispatchQueue.main.asyncAfter(deadline: .now() + moveDelay) {
             print("[DEBUG] PuzzleMenuItemViewModel.makeEngineMove - making engine move at \(moveDelay)s (after animation complete)")
