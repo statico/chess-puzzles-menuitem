@@ -359,7 +359,6 @@ struct ChessBoardView: View {
         let displayFiles = isFlipped ? files.reversed() : files
         for (index, file) in displayFiles.enumerated() {
             let x = CGFloat(index) * squareSize + squareSize / 2
-            let y: CGFloat = 2
 
             let text = Text(file)
                 .font(.system(size: fontSize))
@@ -368,6 +367,8 @@ struct ChessBoardView: View {
             let renderer = ImageRenderer(content: text)
             if let nsImage = renderer.nsImage {
                 let textSize = nsImage.size
+                // Position at bottom: size.height - textSize.height - 2 (2 pixels from bottom edge)
+                let y = size.height - textSize.height - 2
                 let point = CGPoint(
                     x: x - textSize.width / 2,
                     y: y
