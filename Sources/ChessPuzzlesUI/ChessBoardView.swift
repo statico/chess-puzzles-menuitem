@@ -211,8 +211,13 @@ struct ChessBoardView: View {
                 }
 
                 // Skip drawing piece if it's being animated (it will be drawn separately)
-                if let anim = animatedPiece, anim.from == square {
-                    continue
+                if let anim = animatedPiece {
+                    if anim.from == square {
+                        continue // Skip source square
+                    }
+                    if anim.to == square {
+                        continue // Skip destination square during animation
+                    }
                 }
 
                 if let piece = engine.getPiece(at: square) {

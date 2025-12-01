@@ -59,6 +59,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
     private var pausedTime: TimeInterval = 0
     private var timer: Timer?
     private var messageTimer: Timer?
+    private var hasLoadedPuzzle: Bool = false
     var isMenuOpen: Bool = false {
         didSet {
             if isMenuOpen {
@@ -125,6 +126,7 @@ class PuzzleMenuItemViewModel: ObservableObject {
         hintButtonEnabled = true
         solutionButtonEnabled = true
         isPuzzleSolved = false
+        hasLoadedPuzzle = true
         updateNavigationState()
         clearMessage()
 
@@ -365,8 +367,10 @@ class PuzzleMenuItemViewModel: ObservableObject {
                 makeEngineMove()
             }
         } else {
-            // Wrong move
-            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - move invalid")
+            // Wrong move - break the streak
+            print("[DEBUG] PuzzleMenuItemViewModel.handleMove - move invalid, breaking streak")
+            statsManager.recordSolve(time: 0, wasCorrect: false)
+            updateStats()
             showMessage("Incorrect move. Try again!", color: .red)
         }
     }
@@ -686,7 +690,13 @@ struct PuzzleMenuItemContentView: View {
         .id("puzzle-view-\(boardSettings.boardSize.rawValue)-\(boardSizeValue)") // Force view refresh when board size changes
         .onAppear {
             print("[DEBUG] PuzzleMenuItemContentView.body.onAppear - boardSize: \(boardSettings.boardSize.rawValue) (\(boardSettings.boardSize.size)px)")
-            viewModel.loadNewPuzzle()
+            // Only load a new puzzle if one hasn't been loaded yet (check if engine exists)
+            if viewModel.engine == nil {
+                print("[DEBUG] PuzzleMenuItemContentView.body.onAppear - no puzzle loaded yet, loading new puzzle")
+                viewModel.loadNewPuzzle()
+            } else {
+                print("[DEBUG] PuzzleMenuItemContentView.body.onAppear - puzzle already loaded, keeping current puzzle")
+            }
         }
         .onChange(of: boardSettings.boardSize) { newSize in
             print("[DEBUG] PuzzleMenuItemContentView.body.onChange - boardSize changed to: \(newSize.rawValue) (\(newSize.size)px)")
