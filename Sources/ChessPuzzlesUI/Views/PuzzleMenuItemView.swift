@@ -319,7 +319,20 @@ class PuzzleMenuItemViewModel: ObservableObject {
         // Notify that puzzle is solved so menu item can be enabled
         NotificationCenter.default.post(name: NSNotification.Name("PuzzleSolved"), object: nil)
 
-        showMessage("Puzzle Solved!", color: .green)
+        // Build success message with ELO and popularity
+        var message = "Puzzle Solved!"
+        if let puzzle = puzzleManager.getCurrentPuzzle() {
+            var details: [String] = []
+            details.append("ELO \(puzzle.rating)")
+            if let popularity = puzzle.popularity {
+                details.append("pop. \(popularity)%")
+            }
+            if !details.isEmpty {
+                message += " (\(details.joined(separator: ", ")))"
+            }
+        }
+        print("[DEBUG] PuzzleMenuItemViewModel.puzzleSolved - message: \(message)")
+        showMessage(message, color: .green)
     }
 
     func navigateBackward() {

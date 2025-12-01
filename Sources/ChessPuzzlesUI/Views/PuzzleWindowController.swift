@@ -206,7 +206,20 @@ class PuzzleWindowViewModel: ObservableObject {
         solutionButtonEnabled = false
         isPuzzleSolved = true
 
-        showAlert(title: "Puzzle Solved!", message: "Great job!")
+        // Build success message with ELO and popularity
+        var message = "Great job!"
+        if let puzzle = puzzleManager.getCurrentPuzzle() {
+            var details: [String] = []
+            details.append("ELO \(puzzle.rating)")
+            if let popularity = puzzle.popularity {
+                details.append("pop. \(popularity)%")
+            }
+            if !details.isEmpty {
+                message += "\n(\(details.joined(separator: ", ")))"
+            }
+        }
+        print("[DEBUG] PuzzleWindowViewModel.puzzleSolved - message: \(message)")
+        showAlert(title: "Puzzle Solved!", message: message)
     }
 
     @MainActor
