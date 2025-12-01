@@ -26,6 +26,7 @@ struct ChessBoardView: View {
     @State private var selectedSquare: ChessEngine.Square?
     @State private var draggedPiece: (piece: ChessEngine.Piece, square: ChessEngine.Square)?
     @State private var dragLocation: CGPoint = .zero
+    @State private var dragStartLocation: CGPoint = .zero
     @State private var isDragging: Bool = false
     @State private var highlightedSquares: Set<ChessEngine.Square> = []
     @State private var boardColor: BoardColor = BoardColor.load()
@@ -41,8 +42,8 @@ struct ChessBoardView: View {
         animateMove != nil ? "\(animateMove!.from.uci)-\(animateMove!.to.uci)" : ""
     }
 
-    private let selectedSquareColor = Color(red: 0.5, green: 0.8, blue: 1.0, opacity: 0.6)
-    private let highlightColor = Color(red: 0.2, green: 0.8, blue: 0.2, opacity: 0.4)
+    private let selectedSquareColor = Color(red: 1.0, green: 0.9, blue: 0.0, opacity: 0.6) // Yellow
+    private let highlightColor = Color(white: 0.5, opacity: 0.5) // 50% gray for move indicators
     private let opponentMoveColor = Color(red: 1.0, green: 0.9, blue: 0.0, opacity: 0.5) // Translucent yellow
 
     // Computed property to determine if board should be flipped (player on bottom)
@@ -93,9 +94,6 @@ struct ChessBoardView: View {
                             handleDragEnded(value: value, squareSize: squareSize, geometry: geometry)
                         }
                 )
-                .onTapGesture { location in
-                    handleTap(location: location, squareSize: squareSize, geometry: geometry)
-                }
 
                 // Draw dragged piece on top
                 if let dragged = draggedPiece, isDragging {
@@ -242,10 +240,18 @@ struct ChessBoardView: View {
                         with: .color(selectedSquareColor)
                     )
                 } else if highlightedSquares.contains(square) {
-                    context.fill(
-                        Path(rect),
-                        with: .color(highlightColor)
-                    )
+                    // Draw gray circle overlay for valid moves
+                    let circleRadius = squareSize * 0.15 // 15% of square size
+                    let circleCenter = CGPoint(x: rect.midX, y: rect.midY)
+                    let circlePath = Path { path in
+                        path.addEllipse(in: CGRect(
+                            x: circleCenter.x - circleRadius,
+                            y: circleCenter.y - circleRadius,
+                            width: circleRadius * 2,
+                            height: circleRadius * 2
+                        ))
+                    }
+                    context.fill(circlePath, with: .color(highlightColor))
                 }
             }
         }
@@ -421,10 +427,89 @@ struct ChessBoardView: View {
 
     private func handleTap(location: CGPoint, squareSize: CGFloat, geometry: GeometryProxy) {
         guard let square = squareAt(point: location, squareSize: squareSize),
-              let engine = engine,
-              let piece = engine.getPiece(at: square) else {
+              let engine = engine else {
+            // Clicked outside board or no engine - deselect
             selectedSquare = nil
             highlightedSquares.removeAll()
+            return
+        }
+
+        // If a piece is already selected, check if this is a destination click
+        if let fromSquare = selectedSquare {
+            print("[DEBUG] ChessBoardView.handleTap - piece already selected at \(fromSquare.uci), clicked on \(square.uci)")
+            print("[DEBUG] ChessBoardView.handleTap - highlightedSquares count: \(highlightedSquares.count), contains \(square.uci): \(highlightedSquares.contains(square))")
+            if highlightedSquares.count > 0 {
+                let highlightedList = highlightedSquares.map { $0.uci }.joined(separator: ", ")
+                print("[DEBUG] ChessBoardView.handleTap - highlighted squares: \(highlightedList)")
+            }
+
+            // Check if clicking on a valid destination
+            if highlightedSquares.contains(square) {
+                // Valid destination - execute the move
+                print("[DEBUG] ChessBoardView.handleTap - ✓ VALID DESTINATION! Executing move from \(fromSquare.uci) to \(square.uci)")
+                onMove?(fromSquare, square)
+                // Clear selection after move
+                selectedSquare = nil
+                highlightedSquares.removeAll()
+                return
+            } else {
+                print("[DEBUG] ChessBoardView.handleTap - ✗ Not a valid destination (square \(square.uci) not in highlightedSquares)")
+            }
+
+            // Not a valid destination - check if clicking on another player's piece
+            if let piece = engine.getPiece(at: square) {
+                let pieceColor: ChessEngine.Color = piece.isWhite ? .white : .black
+
+                // Check if this is a player's piece
+                let isPlayerPiece: Bool
+                if let playerColor = playerColor {
+                    isPlayerPiece = pieceColor == playerColor
+                } else {
+                    let activeColor = engine.getActiveColor()
+                    isPlayerPiece = pieceColor == activeColor
+                }
+
+                if isPlayerPiece {
+                    // Select this new piece instead
+                    print("[DEBUG] ChessBoardView.handleTap - selecting new square: \(square.uci)")
+                    selectedSquare = square
+                    // Clear old highlights first
+                    highlightedSquares.removeAll()
+
+                    // Highlight legal moves for new selection
+                    if let shouldHighlight = shouldHighlight {
+                        var legalSquares: Set<ChessEngine.Square> = []
+                        for rank in 0..<8 {
+                            for file in 0..<8 {
+                                let testSquare = ChessEngine.Square(file: file, rank: rank)
+                                if shouldHighlight(testSquare, selectedSquare) {
+                                    legalSquares.insert(testSquare)
+                                }
+                            }
+                        }
+                        highlightedSquares = legalSquares
+                        if let selected = selectedSquare {
+                            print("[DEBUG] ChessBoardView.handleTap - highlighted \(legalSquares.count) legal squares for \(selected.uci)")
+                            if legalSquares.count > 0 {
+                                let highlightedList = legalSquares.map { $0.uci }.joined(separator: ", ")
+                                print("[DEBUG] ChessBoardView.handleTap - legal squares: \(highlightedList)")
+                            }
+                        }
+                    }
+                    return
+                }
+            }
+
+            // Clicked on empty square or invalid destination - deselect
+            print("[DEBUG] ChessBoardView.handleTap - deselecting, clicked on empty/invalid square")
+            selectedSquare = nil
+            highlightedSquares.removeAll()
+            return
+        }
+
+        // No piece selected yet - try to select a piece
+        guard let piece = engine.getPiece(at: square) else {
+            // Empty square - do nothing
             return
         }
 
@@ -433,18 +518,24 @@ struct ChessBoardView: View {
         // If playerColor is set, only allow selecting player's pieces
         if let playerColor = playerColor {
             guard pieceColor == playerColor else {
+                // Opponent's piece - do nothing
                 return
             }
         } else {
             // Fallback to original behavior: only allow active color
             let activeColor = engine.getActiveColor()
             guard pieceColor == activeColor else {
+                // Not active color - do nothing
                 return
             }
         }
 
+        // Select the piece
         print("[DEBUG] ChessBoardView.handleTap - selecting square: \(square.uci)")
         selectedSquare = square
+
+        // Clear any existing highlights first
+        highlightedSquares.removeAll()
 
         // Highlight legal moves
         if let shouldHighlight = shouldHighlight {
@@ -458,6 +549,13 @@ struct ChessBoardView: View {
                 }
             }
             highlightedSquares = legalSquares
+            if let selected = selectedSquare {
+                print("[DEBUG] ChessBoardView.handleTap - highlighted \(legalSquares.count) legal squares for \(selected.uci)")
+                if legalSquares.count > 0 {
+                    let highlightedList = legalSquares.map { $0.uci }.joined(separator: ", ")
+                    print("[DEBUG] ChessBoardView.handleTap - legal squares: \(highlightedList)")
+                }
+            }
         }
     }
 
@@ -465,7 +563,8 @@ struct ChessBoardView: View {
         let location = value.location
 
         if !isDragging {
-            // Start drag
+            // Start drag - track start location
+            dragStartLocation = value.startLocation
             guard let square = squareAt(point: location, squareSize: squareSize),
                   let engine = engine,
                   let piece = engine.getPiece(at: square) else {
@@ -510,11 +609,29 @@ struct ChessBoardView: View {
     }
 
     private func handleDragEnded(value: DragGesture.Value, squareSize: CGFloat, geometry: GeometryProxy) {
-        print("[DEBUG] ChessBoardView.handleDragEnded - location: (\(value.location.x), \(value.location.y)), isFlipped: \(isFlipped)")
+        print("[DEBUG] ChessBoardView.handleDragEnded - location: (\(value.location.x), \(value.location.y)), isFlipped: \(isFlipped), isDragging: \(isDragging)")
+
+        // Calculate drag distance to detect taps
+        let dragDistance = sqrt(pow(value.location.x - dragStartLocation.x, 2) + pow(value.location.y - dragStartLocation.y, 2))
+        let isTap = dragDistance < 5.0 // Consider it a tap if moved less than 5 points
+
+        print("[DEBUG] ChessBoardView.handleDragEnded - dragDistance: \(dragDistance), isTap: \(isTap)")
+
+        // Clean up drag state first
+        draggedPiece = nil
+        isDragging = false
+
+        // If it was a tap (minimal movement), handle as tap gesture
+        if isTap {
+            print("[DEBUG] ChessBoardView.handleDragEnded - detected tap, delegating to handleTap")
+            handleTap(location: value.location, squareSize: squareSize, geometry: geometry)
+            // Note: handleTap will manage selectedSquare and highlightedSquares
+            return
+        }
+
+        // This was a drag - handle as drag move
         guard let fromSquare = selectedSquare else {
             print("[DEBUG] ChessBoardView.handleDragEnded - no selected square")
-            draggedPiece = nil
-            isDragging = false
             selectedSquare = nil
             highlightedSquares.removeAll()
             return
@@ -522,14 +639,13 @@ struct ChessBoardView: View {
 
         let location = value.location
         if let toSquare = squareAt(point: location, squareSize: squareSize), toSquare != fromSquare {
-            print("[DEBUG] ChessBoardView.handleDragEnded - move from \(fromSquare.uci) to \(toSquare.uci)")
+            print("[DEBUG] ChessBoardView.handleDragEnded - drag move from \(fromSquare.uci) to \(toSquare.uci)")
             onMove?(fromSquare, toSquare)
         } else {
             print("[DEBUG] ChessBoardView.handleDragEnded - invalid destination square or same square")
         }
 
-        draggedPiece = nil
-        isDragging = false
+        // Clear selection after drag move
         selectedSquare = nil
         highlightedSquares.removeAll()
     }

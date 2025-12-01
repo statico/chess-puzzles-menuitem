@@ -189,28 +189,293 @@ public class ChessEngine {
         let pieceColor: Color = piece.isWhite ? .white : .black
         guard pieceColor == activeColor else { return [] }
 
+        var candidateMoves: [Move] = []
+
+        // Generate candidate moves based on piece type
+        switch piece {
+        case .whitePawn, .blackPawn:
+            candidateMoves = generatePawnMoves(from: square, piece: piece)
+        case .whiteRook, .blackRook:
+            candidateMoves = generateRookMoves(from: square, piece: piece)
+        case .whiteKnight, .blackKnight:
+            candidateMoves = generateKnightMoves(from: square, piece: piece)
+        case .whiteBishop, .blackBishop:
+            candidateMoves = generateBishopMoves(from: square, piece: piece)
+        case .whiteQueen, .blackQueen:
+            candidateMoves = generateQueenMoves(from: square, piece: piece)
+        case .whiteKing, .blackKing:
+            candidateMoves = generateKingMoves(from: square, piece: piece)
+        case .empty:
+            return []
+        }
+
+        // Filter out moves that leave the king in check
+        var legalMoves: [Move] = []
+        for move in candidateMoves {
+            if isMoveLegal(move: move) {
+                legalMoves.append(move)
+            }
+        }
+
+        return legalMoves
+    }
+
+    private func generatePawnMoves(from square: Square, piece: Piece) -> [Move] {
         var moves: [Move] = []
+        let isWhite = piece.isWhite
+        let direction = isWhite ? 1 : -1
+        let startRank = isWhite ? 1 : 6
 
-        // Simple move generation (basic implementation)
-        for rank in 0..<8 {
-            for file in 0..<8 {
-                let to = Square(file: file, rank: rank)
-                let move = Move(from: square, to: to)
+        // Move forward one square
+        if square.rank + direction >= 0 && square.rank + direction < 8 {
+            let forwardSquare = Square(file: square.file, rank: square.rank + direction)
+            if getPiece(at: forwardSquare) == nil {
+                // Promotion on last rank
+                if (isWhite && forwardSquare.rank == 7) || (!isWhite && forwardSquare.rank == 0) {
+                    moves.append(Move(from: square, to: forwardSquare, promotion: isWhite ? .whiteQueen : .blackQueen))
+                } else {
+                    moves.append(Move(from: square, to: forwardSquare))
+                }
+            }
+        }
 
-                // Basic validation - check if destination is empty or has opponent piece
-                if let targetPiece = getPiece(at: to) {
-                    if (piece.isWhite && targetPiece.isWhite) || (piece.isBlack && targetPiece.isBlack) {
-                        continue // Can't capture own piece
+        // Move forward two squares from starting position
+        if square.rank == startRank {
+            let twoForwardSquare = Square(file: square.file, rank: square.rank + direction * 2)
+            if getPiece(at: twoForwardSquare) == nil && getPiece(at: Square(file: square.file, rank: square.rank + direction)) == nil {
+                moves.append(Move(from: square, to: twoForwardSquare))
+            }
+        }
+
+        // Capture diagonally
+        for fileOffset in [-1, 1] {
+            if square.file + fileOffset >= 0 && square.file + fileOffset < 8 &&
+               square.rank + direction >= 0 && square.rank + direction < 8 {
+                let captureSquare = Square(file: square.file + fileOffset, rank: square.rank + direction)
+                if let targetPiece = getPiece(at: captureSquare) {
+                    if (isWhite && targetPiece.isBlack) || (!isWhite && targetPiece.isWhite) {
+                        // Promotion on capture to last rank
+                        if (isWhite && captureSquare.rank == 7) || (!isWhite && captureSquare.rank == 0) {
+                            moves.append(Move(from: square, to: captureSquare, promotion: isWhite ? .whiteQueen : .blackQueen))
+                        } else {
+                            moves.append(Move(from: square, to: captureSquare))
+                        }
                     }
                 }
-
-                // For puzzle purposes, we'll accept moves that are in the solution
-                // Full legal move generation would be more complex
-                moves.append(move)
             }
         }
 
         return moves
+    }
+
+    private func generateRookMoves(from square: Square, piece: Piece) -> [Move] {
+        var moves: [Move] = []
+        let isWhite = piece.isWhite
+
+        // Horizontal and vertical directions
+        let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+
+        for (fileOffset, rankOffset) in directions {
+            for distance in 1..<8 {
+                let newFile = square.file + fileOffset * distance
+                let newRank = square.rank + rankOffset * distance
+
+                guard newFile >= 0 && newFile < 8 && newRank >= 0 && newRank < 8 else { break }
+
+                let targetSquare = Square(file: newFile, rank: newRank)
+                if let targetPiece = getPiece(at: targetSquare) {
+                    if (isWhite && targetPiece.isBlack) || (!isWhite && targetPiece.isWhite) {
+                        moves.append(Move(from: square, to: targetSquare))
+                    }
+                    break // Blocked by piece
+                } else {
+                    moves.append(Move(from: square, to: targetSquare))
+                }
+            }
+        }
+
+        return moves
+    }
+
+    private func generateKnightMoves(from square: Square, piece: Piece) -> [Move] {
+        var moves: [Move] = []
+        let isWhite = piece.isWhite
+
+        let knightMoves = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for (fileOffset, rankOffset) in knightMoves {
+            let newFile = square.file + fileOffset
+            let newRank = square.rank + rankOffset
+
+            guard newFile >= 0 && newFile < 8 && newRank >= 0 && newRank < 8 else { continue }
+
+            let targetSquare = Square(file: newFile, rank: newRank)
+            if let targetPiece = getPiece(at: targetSquare) {
+                if (isWhite && targetPiece.isBlack) || (!isWhite && targetPiece.isWhite) {
+                    moves.append(Move(from: square, to: targetSquare))
+                }
+            } else {
+                moves.append(Move(from: square, to: targetSquare))
+            }
+        }
+
+        return moves
+    }
+
+    private func generateBishopMoves(from square: Square, piece: Piece) -> [Move] {
+        var moves: [Move] = []
+        let isWhite = piece.isWhite
+
+        // Diagonal directions
+        let directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+
+        for (fileOffset, rankOffset) in directions {
+            for distance in 1..<8 {
+                let newFile = square.file + fileOffset * distance
+                let newRank = square.rank + rankOffset * distance
+
+                guard newFile >= 0 && newFile < 8 && newRank >= 0 && newRank < 8 else { break }
+
+                let targetSquare = Square(file: newFile, rank: newRank)
+                if let targetPiece = getPiece(at: targetSquare) {
+                    if (isWhite && targetPiece.isBlack) || (!isWhite && targetPiece.isWhite) {
+                        moves.append(Move(from: square, to: targetSquare))
+                    }
+                    break // Blocked by piece
+                } else {
+                    moves.append(Move(from: square, to: targetSquare))
+                }
+            }
+        }
+
+        return moves
+    }
+
+    private func generateQueenMoves(from square: Square, piece: Piece) -> [Move] {
+        // Queen moves like both rook and bishop
+        return generateRookMoves(from: square, piece: piece) + generateBishopMoves(from: square, piece: piece)
+    }
+
+    private func generateKingMoves(from square: Square, piece: Piece) -> [Move] {
+        var moves: [Move] = []
+        let isWhite = piece.isWhite
+
+        // King can move one square in any direction
+        for fileOffset in -1...1 {
+            for rankOffset in -1...1 {
+                if fileOffset == 0 && rankOffset == 0 { continue }
+
+                let newFile = square.file + fileOffset
+                let newRank = square.rank + rankOffset
+
+                guard newFile >= 0 && newFile < 8 && newRank >= 0 && newRank < 8 else { continue }
+
+                let targetSquare = Square(file: newFile, rank: newRank)
+                if let targetPiece = getPiece(at: targetSquare) {
+                    if (isWhite && targetPiece.isBlack) || (!isWhite && targetPiece.isWhite) {
+                        moves.append(Move(from: square, to: targetSquare))
+                    }
+                } else {
+                    moves.append(Move(from: square, to: targetSquare))
+                }
+            }
+        }
+
+        return moves
+    }
+
+    private func isMoveLegal(move: Move) -> Bool {
+        // Make a deep copy of the board to test the move
+        var originalBoard: [[Piece?]] = Array(repeating: Array(repeating: nil, count: 8), count: 8)
+        for rank in 0..<8 {
+            for file in 0..<8 {
+                originalBoard[rank][file] = board[rank][file]
+            }
+        }
+        let originalActiveColor = activeColor
+
+        // Temporarily make the move
+        guard let piece = getPiece(at: move.from) else { return false }
+        let _ = getPiece(at: move.to) // Capture piece (if any)
+        setPiece(nil, at: move.from)
+        if let promotion = move.promotion {
+            setPiece(promotion, at: move.to)
+        } else {
+            setPiece(piece, at: move.to)
+        }
+
+        // Check if this move leaves the king in check
+        let pieceColor: Color = piece.isWhite ? .white : .black
+        let kingInCheck = isKingInCheck(color: pieceColor)
+
+        // Restore board
+        board = originalBoard
+        activeColor = originalActiveColor
+
+        // Move is legal if it doesn't leave the king in check
+        return !kingInCheck
+    }
+
+    private func isKingInCheck(color: Color) -> Bool {
+        // Find the king
+        let kingPiece: Piece = color == .white ? .whiteKing : .blackKing
+        var kingSquare: Square?
+
+        for rank in 0..<8 {
+            for file in 0..<8 {
+                let square = Square(file: file, rank: rank)
+                if getPiece(at: square) == kingPiece {
+                    kingSquare = square
+                    break
+                }
+            }
+            if kingSquare != nil { break }
+        }
+
+        guard let king = kingSquare else { return false }
+
+        // Check if any opponent piece can attack the king
+        let opponentColor: Color = color.opposite
+        for rank in 0..<8 {
+            for file in 0..<8 {
+                let square = Square(file: file, rank: rank)
+                if let piece = getPiece(at: square) {
+                    let pieceColor: Color = piece.isWhite ? .white : .black
+                    if pieceColor == opponentColor {
+                        // Generate moves for this opponent piece and check if any can capture the king
+                        let moves = generatePseudoLegalMoves(from: square, piece: piece)
+                        if moves.contains(where: { $0.to == king }) {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+
+        return false
+    }
+
+    private func generatePseudoLegalMoves(from square: Square, piece: Piece) -> [Move] {
+        // Generate moves without checking for check (used for check detection)
+        switch piece {
+        case .whitePawn, .blackPawn:
+            return generatePawnMoves(from: square, piece: piece)
+        case .whiteRook, .blackRook:
+            return generateRookMoves(from: square, piece: piece)
+        case .whiteKnight, .blackKnight:
+            return generateKnightMoves(from: square, piece: piece)
+        case .whiteBishop, .blackBishop:
+            return generateBishopMoves(from: square, piece: piece)
+        case .whiteQueen, .blackQueen:
+            return generateQueenMoves(from: square, piece: piece)
+        case .whiteKing, .blackKing:
+            return generateKingMoves(from: square, piece: piece)
+        case .empty:
+            return []
+        }
     }
 
     func toFEN() -> String {

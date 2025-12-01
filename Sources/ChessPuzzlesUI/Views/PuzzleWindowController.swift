@@ -12,6 +12,7 @@ class PuzzleWindowViewModel: ObservableObject {
     @Published var animateMove: (from: ChessEngine.Square, to: ChessEngine.Square)? = nil
     @Published var canGoBackward: Bool = false
     @Published var canGoForward: Bool = false
+    @Published var isPuzzleSolved: Bool = false
 
     private var puzzleManager = PuzzleManager.shared
 
@@ -50,6 +51,7 @@ class PuzzleWindowViewModel: ObservableObject {
 
         updateStatusLabel()
         showNextButton = false
+        isPuzzleSolved = false
         hintButtonEnabled = true
         solutionButtonEnabled = true
         updateNavigationState()
@@ -200,6 +202,7 @@ class PuzzleWindowViewModel: ObservableObject {
         showNextButton = true
         hintButtonEnabled = false
         solutionButtonEnabled = false
+        isPuzzleSolved = true
 
         showAlert(title: "Puzzle Solved!", message: "Great job!")
     }
@@ -361,7 +364,7 @@ struct PuzzleWindowView: View {
                         viewModel.nextClicked()
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color.accentColor)
+                    .tint(viewModel.isPuzzleSolved ? Color.accentColor : nil)
                 }
             }
             .padding(.horizontal, 60)

@@ -243,18 +243,24 @@ class PuzzleMenuItemViewModel: ObservableObject {
 
     func shouldHighlightSquare(_ square: ChessEngine.Square, selectedSquare: ChessEngine.Square?) -> Bool {
         guard let selectedSquare = selectedSquare,
-              puzzleManager.isPlayerTurn() else { return false }
-
-        // For puzzle mode, we'll highlight squares that are part of the solution
-        let move = ChessEngine.Move(from: selectedSquare, to: square)
-        let moveUCI = move.uci
-
-        // Check if this move matches the next move in the solution
-        if let hint = puzzleManager.getHint() {
-            return moveUCI.lowercased() == hint.lowercased()
+              let engine = engine else {
+            return false
         }
 
-        return false
+        guard puzzleManager.isPlayerTurn() else {
+            return false
+        }
+
+        // Don't highlight the source square
+        if square == selectedSquare {
+            return false
+        }
+
+        // Get all legal moves for the selected piece
+        let legalMoves = engine.getLegalMoves(from: selectedSquare)
+
+        // Check if this square is a destination for any legal move
+        return legalMoves.contains { $0.to == square }
     }
 
     func getPlayerColor() -> ChessEngine.Color {
@@ -513,7 +519,7 @@ struct PuzzleMenuItemContentView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(viewModel.nextButtonAction == .next ? Color.accentColor : nil)
+                    .tint(viewModel.isPuzzleSolved ? Color.accentColor : nil)
                 }
             }
             .frame(height: controlHeight)
